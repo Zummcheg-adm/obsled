@@ -1,11 +1,12 @@
 // Обследование ВОЛС — работа без интернета: программа и карта-библиотека в кэше, плитки карты — по мере просмотра.
-const V = 'obsled-1.0.1';
+const V = 'obsled-1.0.2';
 const TILES = 'obsled-tiles';
 const CORE = ['./', './index.html', './manifest.webmanifest', './icon-180.png', './icon-192.png', './icon-512.png', './leaflet.js', './leaflet.css'];
 const TILE_HOST = /(^|\.)tile\.openstreetmap\.org$|(^|\.)maps\.2gis\.com$|(^|\.)arcgisonline\.com$/;
 
 self.addEventListener('install', e => {
-  e.waitUntil(caches.open(V).then(c => c.addAll(CORE)).then(() => self.skipWaiting()));
+  // мимо HTTP-кэша браузера (GitHub Pages отдаёт файлы с кэшем на 10 мин) — иначе новая версия запишет старые файлы
+  e.waitUntil(caches.open(V).then(c => c.addAll(CORE.map(u => new Request(u, {cache: 'reload'})))).then(() => self.skipWaiting()));
 });
 self.addEventListener('activate', e => {
   e.waitUntil(caches.keys()
@@ -20,7 +21,7 @@ function netFirst(req) {
     const finish = r => { if (!done && r) { done = true; resolve(r); } };
     const cached = () => caches.match(req, {ignoreSearch: true}).then(r => r || caches.match('./'));
     const timer = setTimeout(() => cached().then(finish), 3500);
-    fetch(req).then(r => {
+    fetch(req, {cache: 'no-cache'}).then(r => {   // no-cache: сверка с сайтом (304, если не менялась)
       clearTimeout(timer);
       if (r && r.ok) { const c = r.clone(); caches.open(V).then(ca => ca.put(req, c)); }
       finish(r);
