@@ -106,7 +106,7 @@ li{margin:5px 0}
 <script>
 'use strict';
 // Обследование трассы ВОЛС — РНД-Строй. Один файл, без сервера: данные в телефоне (IndexedDB), выгрузка ZIP.
-const VER = '1.0 · 27.10.2026';
+const VER = '1.0.1 · 27.10.2026';
 const DECL = 8.5;            // магнитное склонение, Ростов-на-Дону, ° к востоку (азимут по компасу + DECL = истинный)
 
 const $ = (s, r = document) => r.querySelector(s);
@@ -1293,6 +1293,8 @@ window.addEventListener('unhandledrejection', e => toast('Ошибка: ' + errM
   history.replaceState(st(depth()), '');
   render();
 })();
+// ссылка-задание открыта во вкладке, где программа уже открыта, — меняется только «#…»: перечитать как новую
+window.addEventListener('hashchange', () => { if (/[#&][zt]=/.test(location.hash)) location.reload(); });
 window.OBS = {S, DB, GPS, COMPASS, ACT, buildZip, addPhoto, exifBlock, withExif, makeZip, decodeTask, kmlToTask, useTask, render};
 </script>
 </body>
