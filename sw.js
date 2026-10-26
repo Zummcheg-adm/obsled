@@ -1,5 +1,5 @@
 // Обследование ВОЛС — работа без интернета: программа и карта-библиотека в кэше, плитки карты — по мере просмотра.
-const V = 'obsled-1.0.2';
+const V = 'obsled-1.0.4';
 const TILES = 'obsled-tiles';
 const CORE = ['./', './index.html', './manifest.webmanifest', './icon-180.png', './icon-192.png', './icon-512.png', './leaflet.js', './leaflet.css'];
 const TILE_HOST = /(^|\.)tile\.openstreetmap\.org$|(^|\.)maps\.2gis\.com$|(^|\.)arcgisonline\.com$/;

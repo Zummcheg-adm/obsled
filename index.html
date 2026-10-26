@@ -59,6 +59,15 @@ textarea{min-height:96px;resize:vertical}
 .slot .cap{position:absolute;left:0;right:0;bottom:0;background:rgba(0,0,0,.62);color:#fff;font-size:13px;padding:3px 6px;text-align:left;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .slot .n{position:absolute;right:6px;top:6px;background:rgba(0,0,0,.65);color:#fff;border-radius:10px;padding:1px 8px;font-size:13px}
 .coord{font-variant-numeric:tabular-nums;font-size:18px}
+.stat{border-radius:12px;padding:10px 12px;margin-bottom:10px;font-weight:700;font-size:17px;line-height:1.3;color:#fff}
+.stat .sub{font-weight:400;font-size:14px;margin-top:3px;opacity:.95}
+.stat.go{background:var(--acc);color:var(--accInk)}
+.stat.done{background:var(--ok)}
+.stat.wait{background:var(--mid)}
+.stat.no{background:var(--bad)}
+.stat .bar{height:6px;border-radius:3px;background:rgba(255,255,255,.35);margin-top:8px;overflow:hidden}
+.stat .bar i{display:block;height:100%;background:currentColor;transition:width .5s linear}
+#rfLeft{font-variant-numeric:tabular-nums}
 .tabs{position:fixed;left:0;right:0;bottom:0;z-index:40;background:var(--card);border-top:1px solid var(--line);display:flex;padding-bottom:env(safe-area-inset-bottom)}
 .tabs button{flex:1;border:0;background:none;min-height:56px;font-size:12px;color:var(--mut);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px}
 .tabs button.on{color:var(--acc);font-weight:700}
@@ -106,7 +115,7 @@ li{margin:5px 0}
 <script>
 'use strict';
 // Обследование трассы ВОЛС — РНД-Строй. Один файл, без сервера: данные в телефоне (IndexedDB), выгрузка ZIP.
-const VER = '1.0.2 · 27.10.2026';
+const VER = '1.0.4 · 27.10.2026';
 const DECL = 8.5;            // магнитное склонение, Ростов-на-Дону, ° к востоку (азимут по компасу + DECL = истинный)
 
 const $ = (s, r = document) => r.querySelector(s);
@@ -204,12 +213,29 @@ function shift(lat, lon, az, d) {
   const b = az * RAD;
   return {lat: lat + d * Math.cos(b) / RE / RAD, lon: lon + d * Math.sin(b) / (RE * Math.cos(lat * RAD)) / RAD};
 }
-// где стоит сама опора: у опоры — точка съёмки, в стороне — сдвиг по азимуту и расстоянию
+function brg(a, b) {           // истинный азимут a → b, градусы
+  const f1 = a.lat * RAD, f2 = b.lat * RAD, dl = (b.lon - a.lon) * RAD;
+  return (Math.atan2(Math.sin(dl) * Math.cos(f2), Math.cos(f1) * Math.sin(f2) - Math.sin(f1) * Math.cos(f2) * Math.cos(dl)) / RAD + 360) % 360;
+}
+// ход машины для точки «из машины»: по GPS в движении или по компасу (записаны в точке), иначе — от предыдущей точки
+function courseOf(p) {
+  if (p.course != null) return {deg: p.course, src: p.courseSrc};
+  if (p.lat == null) return null;
+  for (let j = S.pts.indexOf(p) - 1; j >= 0; j--) {
+    const q = S.pts[j]; if (q.lat == null) continue;
+    return dist(q, p) >= 5 ? {deg: brg(q, p), src: 'prev'} : null;
+  }
+  return null;
+}
+// где стоит сама опора: у опоры — точка съёмки; в стороне — сдвиг по компасу и расстоянию; из машины — вбок от хода машины
 function pos(p) {
   if (!p || p.lat == null || p.lon == null) return null;
   if (p.mode === 's' && p.az != null && p.d > 0) return shift(p.lat, p.lon, p.az + DECL, p.d);
+  if (p.mode === 'c' && p.side && p.d > 0) { const c = courseOf(p); if (c) return shift(p.lat, p.lon, c.deg + (p.side === 'R' ? 90 : -90), p.d); }
   return {lat: p.lat, lon: p.lon};
 }
+const MODE_NAME = {u: 'у опоры', s: 'в стороне', c: 'из машины'};
+const away = p => p.mode === 's' || p.mode === 'c';     // телефон не у самой опоры
 function span(p) {
   if (!TYPES[p.type] || !TYPES[p.type].line) return null;
   const a = pos(p); if (!a) return null;
@@ -301,13 +327,15 @@ async function newSurvey(name, task) {
 
 // ---------------------------------------------------------------- GPS и компас
 const GPS = {
-  last: null, err: null, w: null, subs: new Set(),
+  last: null, err: null, w: null, subs: new Set(), course: null,
   start() {
     if (this.w != null) return;
     if (!navigator.geolocation) { this.err = {code: 0, message: 'нет GPS в браузере'}; this.emit(); return; }
     this.w = navigator.geolocation.watchPosition(p => {
       const c = p.coords;
       this.last = {lat: c.latitude, lon: c.longitude, acc: c.accuracy, alt: c.altitude, t: Date.now()};
+      // направление движения — только на ходу (от 7 км/ч), стоя iPhone его не даёт
+      if (c.speed != null && c.speed >= 2 && c.heading != null && isFinite(c.heading) && c.heading >= 0) this.course = {deg: c.heading, t: Date.now()};
       this.err = null; this.emit();
     }, e => { this.err = e; this.emit(); }, {enableHighAccuracy: true, maximumAge: 0, timeout: 30000});
   },
@@ -352,10 +380,15 @@ const Refine = {
     const g = GPS.fresh(4000); if (g) this.add(g);
     this.timer = setInterval(() => {
       const now = Date.now();
-      if ((this.first && now - this.first > 10000) || now - this.t0 > 45000) this.stop();
+      if ((this.first && now - this.first > 10000) || now - this.t0 > 45000) { this.stop(); return; }
+      const l = $('#rfLeft'), b = $('#rfBar');            // обратный отсчёт на экране точки
+      if (l) l.textContent = this.left();
+      if (b) b.style.width = this.pct() + '%';
     }, 500);
     updCoord(S.pts.find(q => q.id === pid));
   },
+  left() { return Math.max(0, Math.ceil((this.first + 10000 - Date.now()) / 1000)); },
+  pct() { return Math.min(100, Math.round((Date.now() - this.first) / 100)); },
   add(g) {
     const last = this.sm[this.sm.length - 1];
     if (last && last.t === g.t) return;
@@ -370,9 +403,14 @@ const Refine = {
     if (this.fn) GPS.subs.delete(this.fn);
     this.fn = null; clearInterval(this.timer); this.timer = null;
     const pid = this.pid; this.pid = null;
-    if (!silent && pid) updCoord(S.pts.find(q => q.id === pid));
+    if (!silent && pid) {
+      const p = S.pts.find(q => q.id === pid); if (!p) return;
+      updCoord(p);
+      toast(p.lat == null ? `Т${p.n}: GPS не поймался — поставьте точку «На карте»` : `✓ Т${p.n}: координаты записаны — можно отходить и снимать`, 3500);
+    }
   },
 };
+const BEARING = {k: false};    // что засекаем компасом: false — направление на опору, true — ход машины
 const COMPASS = {
   h: null, acc: null, t: 0, on: false, subs: new Set(),
   request() {            // вызывать прямо в обработчике нажатия (iPhone спрашивает разрешение)
@@ -680,7 +718,7 @@ function csvOut(o) {
   const q = v => { const s = v == null ? '' : String(v); return /[";\n\r]/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s; };
   const n7 = v => v == null ? '' : v.toFixed(7).replace('.', ',');
   const rows = [['№', 'Тип', 'Широта', 'Долгота', 'Точность, м', 'Как снято', 'Пролёт от предыдущей, м', 'Отметки', 'Примечание', 'Фото, шт', 'Голос, шт', 'Время']];
-  for (const p of o.points) rows.push([p.code, p.typeName, n7(p.poleLat), n7(p.poleLon), p.acc != null ? fmtM(p.acc) : '', p.src === 'map' ? 'на карте' : p.mode, p.spanM != null ? Math.round(p.spanM) : '', p.fieldsText, p.note, p.photos.length, p.audio.length, fmtT(Date.parse(p.created))]);
+  for (const p of o.points) rows.push([p.code, p.typeName, n7(p.poleLat), n7(p.poleLon), p.acc != null ? fmtM(p.acc) : '', p.src === 'map' ? 'на карте' : p.mode + (p.side && p.distM ? `, ${p.side} ${p.distM} м` : ''), p.spanM != null ? Math.round(p.spanM) : '', p.fieldsText, p.note, p.photos.length, p.audio.length, fmtT(Date.parse(p.created))]);
   return '﻿' + rows.map(r => r.map(q).join(';')).join('\r\n') + '\r\n';
 }
 function readme(o, full) {
@@ -688,7 +726,8 @@ function readme(o, full) {
     `Точек: ${o.points.length}, фото: ${o.points.reduce((a, p) => a + p.photos.length, 0)}${full ? '' : ' (в этом архиве без фото)'}`, '',
     'obsledovanie.json — все данные', 'tochki.kml — точки и ход по опорам (Google Earth, карты)', 'vedomost.csv — таблица для Excel',
     'foto/ — фото; координаты места съёмки записаны в каждом снимке (EXIF)', 'golos/ — голосовые заметки', '',
-    'Координаты — WGS-84. Направления — по компасу телефона (магнитные; склонение для Ростова ' + String(DECL).replace('.', ',') + '° к востоку учтено в координатах опор «в стороне»).', ''].join('\r\n');
+    'Координаты — WGS-84. Направления — по компасу телефона (магнитные; склонение для Ростова ' + String(DECL).replace('.', ',') + '° к востоку учтено в координатах опор «в стороне»).',
+    'Опоры «из машины» — сдвиг вбок от хода машины (courseTrue, истинный: по GPS на ходу, по компасу или от предыдущей точки) на distM метров.', ''].join('\r\n');
 }
 async function buildZip(full, prog) {
   const s = S.survey, pts = [...S.pts].sort((a, b) => a.n - b.n), files = [], ts = Date.now();
@@ -697,8 +736,10 @@ async function buildZip(full, prog) {
   for (const p of pts) {
     const q = pos(p), T = TYPES[p.type] || TYPES.zam, sp = span(p);
     const P = {n: p.n, code: code(p), type: p.type, typeName: T.name, lat: p.lat, lon: p.lon, acc: p.acc, alt: p.alt, fixN: p.fixN,
-      fixTime: p.fixT ? new Date(p.fixT).toISOString() : null, src: p.src, mode: p.mode === 's' ? 'в стороне' : 'у опоры',
+      fixTime: p.fixT ? new Date(p.fixT).toISOString() : null, src: p.src, mode: MODE_NAME[p.mode] || MODE_NAME.u,
       azMag: p.az, azAcc: p.azAcc == null ? null : p.azAcc, distM: p.d, poleLat: q ? q.lat : null, poleLon: q ? q.lon : null,
+      side: p.mode === 'c' ? ({L: 'слева', R: 'справа'}[p.side] || null) : null,
+      courseTrue: p.mode === 'c' && courseOf(p) ? Math.round(courseOf(p).deg) : null, courseSrc: p.mode === 'c' && courseOf(p) ? courseOf(p).src : null,
       spanM: sp == null ? null : Math.round(sp * 10) / 10, fields: p.f, fieldsText: fieldsText(p), note: p.note,
       created: new Date(p.cr).toISOString(), photos: [], audio: []};
     let k = 0;
@@ -833,7 +874,7 @@ const MAP = {
   placeUI() {
     const p = S.place && S.pts.find(q => q.id === S.place);
     $('#cross').hidden = !p; const b = $('#placebar'); b.hidden = !p;
-    if (p) b.innerHTML = `<div style="margin-bottom:8px">Двигайте карту и поставьте крестик точно на опору Т${p.n}</div><div class="row"><button class="btn pri" data-a="place-ok">Поставить сюда</button><button class="btn" data-a="place-no">Не надо</button></div>`;
+    if (p) b.innerHTML = `<div style="margin-bottom:8px">Двигайте карту пальцем и поставьте красный крестик точно на опору Т${p.n}.<div class="small mut">Синяя точка — где вас видит GPS (может врать). Не узнаёте место — «Спутник».</div></div><div class="row"><button class="btn pri" data-a="place-ok">Поставить сюда</button><button class="btn" data-a="place-no">Не надо</button></div>`;
   },
 };
 
@@ -873,7 +914,7 @@ function shortInfo(p) {
 function ptRow(p) {
   const T = TYPES[p.type] || TYPES.zam, sp = span(p), ph = p.photos.length;
   const filled = T.slots.filter(sl => p.photos.some(f => f.slot === sl)).length;
-  const bits = [p.lat == null ? '<b style="color:var(--bad)">нет координат</b>' : p.src === 'map' ? 'на карте' : '±' + fmtM(p.acc) + ' м' + (p.mode === 's' ? ', в стороне' : '')];
+  const bits = [p.lat == null ? '<b style="color:var(--bad)">нет координат</b>' : p.src === 'map' ? 'на карте' : '±' + fmtM(p.acc) + ' м' + (away(p) ? ', ' + MODE_NAME[p.mode] : '')];
   if (sp != null) bits.push('пролёт ' + Math.round(sp) + ' м');
   bits.push('фото ' + ph + (filled >= T.slots.length ? ' ✓' : ` (${filled}/${T.slots.length})`));
   if (p.audio.length) bits.push('голос ' + p.audio.length);
@@ -883,7 +924,7 @@ function ptRow(p) {
 function tPts() {
   let h = nearHint();
   if (!S.pts.length) h += `<div class="card"><b>Как работать</b><ol class="small">
-<li>Подойдите к опоре вплотную и нажмите «+ Опора» — координаты запишутся сами. Постойте 10 секунд.</li>
+<li>Подойдите к опоре вплотную и нажмите «+ Опора» — координаты запишутся сами. Постойте 10 секунд, пока не загорится зелёное «✓ Координаты записаны». Потом можно отходить и снимать.</li>
 <li>Снимайте по плиткам: опора целиком, табличка, верх, вперёд по трассе.</li>
 <li>Отметьте кнопками: чья, тип, кабели, место. Остальное — в примечание, можно голосом.</li>
 <li>Дальше — «+ Следующая опора». В конце — вкладка «Выгрузка».</li></ol></div>`;
@@ -902,7 +943,7 @@ function tExp() {
   const size = S.pts.reduce((a, p) => a + p.photos.reduce((b, f) => b + (f.size || 0), 0) + p.audio.reduce((b, f) => b + (f.size || 0), 0), 0);
   const noC = S.pts.filter(p => p.lat == null);
   let h = `<div class="card">Точек <b>${n}</b> · фото <b>${ph}</b>${au ? ` · голосовых <b>${au}</b>` : ''} · ≈${fmtMB(size)}`;
-  if (noC.length) h += `<div style="color:var(--bad);margin-top:6px">Без координат: ${noC.map(p => 'Т' + p.n).join(', ')} — откройте точку и нажмите «Уточнить GPS» или «На карте».</div>`;
+  if (noC.length) h += `<div style="color:var(--bad);margin-top:6px">Без координат: ${noC.map(p => 'Т' + p.n).join(', ')} — откройте точку и нажмите «📍 Записать координаты» или «На карте».</div>`;
   h += '</div>';
   if (S.zip) {
     h += `<div class="card"><div>Архив собран${S.zip.full ? '' : ' (без фото)'}: <b>${fmtMB(S.zip.blob.size)}</b></div><div class="small mut" style="margin:4px 0 10px;word-break:break-all">${esc(S.zip.name)}</div>
@@ -925,18 +966,42 @@ function vSurvey() {
   const fab = t === 'pts' ? '<div class="fab"><button class="btn pri big" data-a="add" data-t="opora">+ Опора</button><button class="btn big" style="flex:0 0 36%" data-a="add-menu">+ Другое</button></div>' : '';
   return hdr(S.survey.name, true, '<button class="ib" data-a="sv-menu" aria-label="Меню">⋯</button>') + `<main>${body}</main>` + fab + tabsBar();
 }
+// полоса состояния: идёт запись координат (стоять) / записано (можно отходить) / нет координат
+function statHtml(p) {
+  const at = away(p) ? 'на месте' : 'у опоры';
+  if (Refine.pid === p.id) {
+    if (!Refine.first) return `<div class="stat wait">📍 Ловлю GPS — стойте ${at}<div class="sub">Координаты запишутся сами</div></div>`;
+    return `<div class="stat go">📍 Записываю координаты — стойте ${at}: <span id="rfLeft">${Refine.left()}</span> с<div class="bar"><i id="rfBar" style="width:${Refine.pct()}%"></i></div></div>`;
+  }
+  if (p.lat == null) return '<div class="stat no">Координат нет<div class="sub">Встаньте вплотную к опоре и нажмите «📍 Записать координаты» или поставьте точку «На карте»</div></div>';
+  if (p.src === 'map') return '<div class="stat done">✓ Опора поставлена на карте</div>';
+  if (p.acc > 15) return `<div class="stat wait">⚠ Записано, но точность слабая: ±${fmtM(p.acc)} м<div class="sub">Нажмите «📍 Переснять» ${at} или поставьте опору «На карте» по месту</div></div>`;
+  const sub = p.mode === 's' ? 'Опора считается по направлению и расстоянию ниже'
+    : p.mode === 'c' ? (p.side && p.d ? `Опора ${p.side === 'R' ? 'справа' : 'слева'} от машины, ${p.d} м${courseOf(p) ? '' : ' — ход машины не известен, засеките ниже'}` : 'Ниже: с какой стороны опора и сколько метров')
+    : 'Следующая: подойдите к ней вплотную → «+ Следующая опора»';
+  return `<div class="stat done">✓ Координаты записаны — можно ${p.mode === 'c' ? 'ехать' : 'отходить и снимать'}<div class="sub">${sub}</div></div>`;
+}
 function coordHtml(p) {
   const R = Refine.pid === p.id;
-  let h = '';
-  if (p.lat == null) h += `<div style="color:var(--bad);font-weight:700">${R ? 'Ловлю GPS… стойте у опоры' : 'Нет координат'}</div>`;
-  else {
+  let h = statHtml(p);
+  if (p.lat != null) {
     h += `<div class="coord"><b>${p.lat.toFixed(6)}, ${p.lon.toFixed(6)}</b></div>`;
-    h += `<div class="small mut">${p.src === 'map' ? 'поставлено на карте' : '±' + fmtM(p.acc) + ' м · замеров ' + (p.fixN || 1)} · ${fmtT(p.fixT || p.cr)}${R ? ' · <b style="color:var(--acc)">уточняю, стойте…</b>' : ''}</div>`;
-    if (p.src !== 'map' && p.acc > 15 && !R) h += '<div class="small" style="color:var(--mid);margin-top:4px">Точность слабая: постойте у опоры и нажмите «Уточнить GPS» или поставьте точку на карте.</div>';
+    h += `<div class="small mut">${p.src === 'map' ? 'поставлено на карте' : '±' + fmtM(p.acc) + ' м · замеров ' + (p.fixN || 1)} · ${fmtT(p.fixT || p.cr)}</div>`;
   }
   const sp = span(p);
   if (sp != null) h += `<div class="small" style="margin-top:4px">Пролёт от предыдущей: <b>${Math.round(sp)} м</b>${sp > 50 ? ' <b style="color:var(--mid)">— больше 50 м</b>' : ''}</div>`;
-  h += `<div class="chips" style="margin-top:10px"><button class="chip${p.mode !== 's' ? ' on' : ''}" data-a="pt-mode" data-m="u">Я у опоры</button><button class="chip${p.mode === 's' ? ' on' : ''}" data-a="pt-mode" data-m="s">Опора в стороне</button></div>`;
+  h += `<div class="chips" style="margin-top:10px">${[['u', 'Я у опоры'], ['s', 'Опора в стороне'], ['c', '🚗 Из машины']].map(([m, t]) => `<button class="chip${(p.mode || 'u') === m ? ' on' : ''}" data-a="pt-mode" data-m="${m}">${t}</button>`).join('')}</div>`;
+  if (p.mode === 'c') {
+    const c = courseOf(p), CS = {gps: 'по GPS на ходу', prev: 'от предыдущей точки', compass: 'по компасу'};
+    h += '<div class="small" style="margin-top:8px">Где опора от машины (по ходу движения):</div>';
+    h += `<div class="chips" style="margin-top:6px"><button class="chip${p.side === 'L' ? ' on' : ''}" data-a="pt-side" data-s="L">◀ Слева</button><button class="chip${p.side === 'R' ? ' on' : ''}" data-a="pt-side" data-s="R">Справа ▶</button></div>`;
+    h += `<div class="chips" style="margin-top:6px">${[2, 3, 4, 5, 7, 10, 15].map(d => `<button class="chip${p.d === d ? ' on' : ''}" data-a="pt-d" data-d="${d}">${d} м</button>`).join('')}</div>`;
+    h += `<div class="small" style="margin-top:6px">Ход машины: <b>${c ? Math.round(c.deg) + '° — ' + CS[c.src] : 'не известен'}</b></div>`;
+    if (!c) h += '<div class="small" style="color:var(--mid)">Машина стояла — GPS направления не дал. Засеките ход по компасу.</div>';
+    h += '<button class="btn" style="width:100%;margin-top:8px" data-a="bearing" data-k="course">🧭 Ход машины по компасу</button>';
+    const q = pos(p);
+    if (q && c && p.side && p.d) h += `<div class="small mut" style="margin-top:6px">Опора по расчёту: ${q.lat.toFixed(6)}, ${q.lon.toFixed(6)}</div>`;
+  }
   if (p.mode === 's') {
     h += `<div class="small" style="margin-top:8px">Направление на опору: <b>${p.az == null ? 'не засечено' : Math.round(p.az) + '°'}</b> · до опоры: <b>${p.d ? p.d + ' м' : 'не задано'}</b></div>`;
     h += '<button class="btn" style="width:100%;margin-top:8px" data-a="bearing">🧭 Засечь направление</button>';
@@ -944,7 +1009,7 @@ function coordHtml(p) {
     const q = pos(p);
     if (q && p.az != null && p.d) h += `<div class="small mut" style="margin-top:6px">Опора по расчёту: ${q.lat.toFixed(6)}, ${q.lon.toFixed(6)}</div>`;
   }
-  h += '<div class="row" style="margin-top:10px"><button class="btn" data-a="refix">Уточнить GPS</button><button class="btn" data-a="pt-map">На карте</button></div>';
+  h += `<div class="row" style="margin-top:10px"><button class="btn${p.lat == null && !R ? ' pri' : ''}" data-a="refix" ${R ? 'disabled' : ''}>📍 ${R ? 'Записываю…' : p.lat == null ? 'Записать координаты' : 'Переснять'}</button><button class="btn" data-a="pt-map">На карте</button></div>`;
   return h;
 }
 function updCoord(p) { if (p && S.view === 'point' && S.pid === p.id) { const el = $('#coord'); if (el) el.innerHTML = coordHtml(p); } }
@@ -984,7 +1049,7 @@ function vPoint() {
   h += p.audio.map(a => `<div class="row" style="margin-bottom:6px"><button class="btn" data-a="au-play" data-id="${a.id}">▶ ${fmtT(a.time)} · ${Math.round(a.dur || 0)} с</button><button class="btn red" style="flex:0 0 56px" data-a="au-del" data-id="${a.id}">✕</button></div>`).join('');
   h += `<button class="btn big" data-a="rec">${REC.on ? '■ Остановить запись' : '🎙 Записать голосом'}</button>`;
   h += `<div class="row small" style="margin-top:14px"><button class="btn" data-a="pt-move" data-dir="-1" ${prev ? '' : 'disabled'}>▲ Раньше по трассе</button><button class="btn" data-a="pt-move" data-dir="1" ${next ? '' : 'disabled'}>▼ Позже</button></div>`;
-  h += '<div style="height:80px"></div></main>';
+  h += '<div style="height:110px"></div></main>';
   h += `<div class="fab low"><button class="btn" style="flex:0 0 52px;font-size:24px" data-a="pt-go" data-id="${prev ? prev.id : ''}" ${prev ? '' : 'disabled'} aria-label="Предыдущая">‹</button><button class="btn pri big" data-a="add" data-t="opora">+ Следующая опора</button><button class="btn" style="flex:0 0 52px;font-size:24px" data-a="pt-go" data-id="${next ? next.id : ''}" ${next ? '' : 'disabled'} aria-label="Следующая">›</button></div>`;
   return h;
 }
@@ -1034,11 +1099,12 @@ function toast(msg, ms = 2600) {
   clearTimeout(toastT); toastT = setTimeout(() => { t.style.display = 'none'; }, ms);
 }
 const HELP = `<h3>Как работать</h3><ol>
-<li>Подойдите к опоре вплотную и нажмите «+ Опора». Координаты запишутся сами и уточнятся за 10 секунд — не уходите сразу.</li>
+<li>Подойдите к опоре вплотную и нажмите «+ Опора». Координаты запишутся сами за 10 секунд — стойте, пока не загорится зелёное «✓ Координаты записаны». Потом отходите и снимайте: место опоры уже не изменится. Забыли — «📍 Переснять», стоя у опоры.</li>
 <li>Фото — по плиткам. Табличку снимайте крупно, чтобы читался номер.</li>
 <li>Отметки — кнопками. Всё остальное — в примечание (микрофон на клавиатуре) или голосовой заметкой.</li>
 <li>Опора за забором или через дорогу — «Опора в стороне»: засеките направление компасом и выберите расстояние.</li>
-<li>GPS слабый (±20 м и больше) — «На карте» и поставьте точку вручную.</li>
+<li>Из машины — остановитесь напротив опоры, «+ Опора», режим «🚗 Из машины»: «Слева/Справа» и метры. Направление берётся из GPS на ходу. Следующие точки получат тот же режим.</li>
+<li>GPS врёт — «На карте»: двигайте карту, крестик на опору, «Поставить сюда».</li>
 <li>В конце: «Выгрузка» → «Собрать архив» → «Отправить» → почта rnd-stroy@internet.ru или Telegram.</li></ol>
 <p class="small"><b>GPS не работает или ±1000 м</b> — Настройки → Конфиденциальность и безопасность → Службы геолокации → Сайты Safari: «При использовании», «Точная геопозиция» — включить.</p>
 <p class="small"><b>Данные</b> хранятся в телефоне, в этой программе, пока не удалите. Интернет нужен только для карты. Не открывайте программу в «Частном доступе».</p>
@@ -1098,13 +1164,18 @@ const ACT = {
     const type = el.dataset.t || 'opora', g = GPS.fresh(10000);
     const n = S.pts.length ? Math.max(...S.pts.map(p => p.n)) + 1 : 1;
     const p = {id: uid(), survey: S.sid, n, type, cr: Date.now(), upd: Date.now(), lat: g ? g.lat : null, lon: g ? g.lon : null, acc: g ? g.acc : null, alt: g ? g.alt : null,
-      fixN: g ? 1 : 0, fixT: g ? g.t : null, src: 'gps', mode: 'u', az: null, azAcc: null, d: null, f: {}, note: '', photos: [], audio: []};
+      fixN: g ? 1 : 0, fixT: g ? g.t : null, src: 'gps', mode: 'u', az: null, azAcc: null, d: null, side: null, course: null, courseSrc: null, f: {}, note: '', photos: [], audio: []};
+    const last = [...S.pts].reverse().find(q => q.src !== 'map');           // поставленные на карте режим не меняют
+    if (last && last.mode === 'c') Object.assign(p, {mode: 'c', side: last.side, d: last.d});   // едет дальше — «из машины» как у прошлой
+    const gc = GPS.course;
+    if (gc && Date.now() - gc.t < 120000) Object.assign(p, {course: Math.round(gc.deg), courseSrc: 'gps'});
     S.pts.push(p);
     savePoint(p).catch(() => {});
     Refine.start(p.id);
     if (S.view === 'point') { flushSave(); S.pid = p.id; history.replaceState(st(depth()), ''); render().then(() => window.scrollTo(0, 0)); }
     else go('point', {pid: p.id});
-    toast(g ? `Т${n}: координаты записаны, уточняю — постойте 10 с` : `Т${n}: жду GPS — стойте у опоры`, 3500);
+    const at = away(p) ? 'на месте' : 'у опоры';
+    toast(g ? `Т${n}: записываю координаты — постойте ${at} 10 с` : `Т${n}: жду GPS — стойте ${at}`, 3500);
   },
   'open-pt'(el) { go('point', {pid: el.dataset.id}); },
   'pt-go'(el) {
@@ -1132,33 +1203,46 @@ const ACT = {
     ACT.back();
   },
   'pt-type'(el) { const p = curPt(); p.type = el.dataset.t; savePoint(p).catch(() => {}); rr(); },
-  'pt-mode'(el) { const p = curPt(); p.mode = el.dataset.m; savePoint(p).catch(() => {}); updCoord(p); },
+  'pt-mode'(el) {
+    const p = curPt(), m = el.dataset.m;
+    if (m !== p.mode && (m === 's' || m === 'c')) p.d = null;     // метры у «в стороне» и «из машины» разные по смыслу
+    if (m === 'c' && !p.side) p.side = 'R';                       // движение правостороннее — опоры чаще справа
+    p.mode = m; savePoint(p).catch(() => {}); updCoord(p);
+  },
   'pt-d'(el) { const p = curPt(); p.d = Number(el.dataset.d); savePoint(p).catch(() => {}); updCoord(p); },
-  refix() { const p = curPt(); Refine.start(p.id); toast('Стойте у опоры 10 секунд', 3000); },
+  'pt-side'(el) { const p = curPt(); p.side = el.dataset.s; savePoint(p).catch(() => {}); updCoord(p); },
+  refix() {
+    const p = curPt();
+    if (p.lat != null && !confirm(away(p) ? 'Переснять координаты точки, где вы стоите? Старые заменятся.' : 'Переснять координаты? Встаньте вплотную к опоре — старые координаты заменятся.')) return;
+    Refine.start(p.id); toast(away(p) ? 'Стойте на месте 10 секунд' : 'Стойте у опоры 10 секунд', 3000);
+  },
   'pt-map'() { const p = curPt(); S.focus = p.id; S.place = p.id; S.tab = 'map'; go('survey', {pid: null}); },
   'place-ok'() {
     const p = S.pts.find(q => q.id === S.place); if (!p || !MAP.m) return;
     const c = MAP.m.getCenter();
     if (Refine.pid === p.id) Refine.stop(true);
-    Object.assign(p, {lat: c.lat, lon: c.lng, acc: null, alt: null, src: 'map', fixN: 0, fixT: Date.now(), mode: 'u'});
+    Object.assign(p, {lat: c.lat, lon: c.lng, acc: null, alt: null, src: 'map', fixN: 0, fixT: Date.now(), mode: 'u', d: null});
     savePoint(p).catch(() => {});
-    S.place = null; MAP.draw(); MAP.placeUI(); toast(`Т${p.n} поставлена на карте`);
+    S.place = null; MAP.draw(); MAP.placeUI(); toast(`✓ Т${p.n} поставлена на карте`);
+    if (depth() > 0) ACT.back();       // обратно в точку — снимать и отмечать дальше
   },
   'place-no'() { S.place = null; MAP.placeUI(); },
   'map-base'(el) { MAP.setBase(el.dataset.b); },
   'map-me'() { const g = GPS.fresh(60000); if (g && MAP.m) MAP.m.setView([g.lat, g.lon], Math.max(MAP.m.getZoom(), 17)); else toast('GPS ещё не поймал'); },
   'map-fit'() { MAP.fit(); },
-  bearing() {
+  bearing(el) {
     const pr = COMPASS.request();      // первым делом — пока длится нажатие
+    const course = BEARING.k = el && el.dataset.k === 'course';
     const upd = h => { const e = $('#cmp'); if (e) e.textContent = Math.round(h) + '°'; const a = $('#cmpacc'); if (a && COMPASS.acc != null && COMPASS.acc >= 0) a.textContent = 'погрешность компаса ±' + Math.round(COMPASS.acc) + '°'; };
-    sheet(`<h3>Направление на опору</h3><div class="small">Держите телефон горизонтально, верхним краем точно на опору, и нажмите «Засечь».</div><div id="cmp" style="font-size:60px;text-align:center;font-weight:700;margin:18px 0 4px">—</div><div id="cmpacc" class="small mut" style="text-align:center;min-height:20px"></div><div class="row" style="margin-top:12px"><button class="btn pri big" data-a="bearing-set">Засечь</button><button class="btn big" data-a="sheet-close">Отмена</button></div>`, () => COMPASS.subs.delete(upd));
+    sheet(`<h3>${course ? 'Ход машины' : 'Направление на опору'}</h3><div class="small">${course ? 'Держите телефон горизонтально, верхним краем вперёд по ходу машины, вдоль неё, и нажмите «Засечь». В машине компас врёт сильнее — лучше держать телефон у открытого окна.' : 'Держите телефон горизонтально, верхним краем точно на опору, и нажмите «Засечь».'}</div><div id="cmp" style="font-size:60px;text-align:center;font-weight:700;margin:18px 0 4px">—</div><div id="cmpacc" class="small mut" style="text-align:center;min-height:20px"></div><div class="row" style="margin-top:12px"><button class="btn pri big" data-a="bearing-set">Засечь</button><button class="btn big" data-a="sheet-close">Отмена</button></div>`, () => COMPASS.subs.delete(upd));
     COMPASS.subs.add(upd);
     pr.then(ok => { if (!ok) { const e = $('#cmp'); if (e) { e.textContent = 'нет доступа к компасу'; e.style.fontSize = '20px'; } } });
   },
   'bearing-set'() {
     const p = curPt(), h = COMPASS.fresh();
     if (h == null) { toast('Компас молчит — поводите телефоном восьмёркой и попробуйте ещё раз', 5000); return; }
-    p.az = Math.round(h * 10) / 10; p.azAcc = COMPASS.acc != null && COMPASS.acc >= 0 ? Math.round(COMPASS.acc) : null;
+    if (BEARING.k) Object.assign(p, {course: Math.round(((h + DECL) % 360) * 10) / 10, courseSrc: 'compass'});   // ход машины храним истинным
+    else { p.az = Math.round(h * 10) / 10; p.azAcc = COMPASS.acc != null && COMPASS.acc >= 0 ? Math.round(COMPASS.acc) : null; }
     savePoint(p).catch(() => {}); closeSheet(); updCoord(p);
   },
   chip(el) {
