@@ -1,0 +1,1299 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>Обследование ВОЛС</title>
+<meta name="description" content="Обследование трассы ВОЛС: точки по GPS, фото по списку, отметки, выгрузка архивом">
+<meta name="theme-color" content="#0f2740">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Обследование">
+<meta name="format-detection" content="telephone=no">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="apple-touch-icon" href="icon-180.png">
+<link rel="icon" type="image/png" href="icon-192.png">
+<style>
+:root{--bg:#eef1f4;--card:#fff;--ink:#13202c;--mut:#5d6d7c;--line:#cfd8e1;--acc:#0b63c5;--accInk:#fff;--chip:#e6ecf2;--ok:#1b8a3a;--mid:#b86e00;--bad:#c62828;--bar:#0f2740;--barInk:#fff;--shade:rgba(0,0,0,.45)}
+@media (prefers-color-scheme:dark){:root{--bg:#0d1319;--card:#16202a;--ink:#e6edf3;--mut:#97a7b7;--line:#2b3947;--acc:#4c9dff;--accInk:#04111f;--chip:#22303d;--bar:#09192a}}
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+html,body{margin:0;background:var(--bg);color:var(--ink)}
+body{font:17px/1.35 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Arial,sans-serif;-webkit-text-size-adjust:100%}
+button,input,textarea{font:inherit;color:inherit}
+button{cursor:pointer}
+.vh{position:fixed;left:-2000px;top:0;width:1px;height:1px;opacity:0}
+.top{position:sticky;top:0;z-index:30;background:var(--bar);color:var(--barInk);padding:calc(env(safe-area-inset-top) + 6px) 8px 8px;display:flex;align-items:center;gap:6px;min-height:52px}
+.top h1{font-size:18px;margin:0 4px;flex:1;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.ib{background:none;border:0;color:inherit;min-width:44px;min-height:44px;font-size:24px;line-height:1;border-radius:10px;display:inline-flex;align-items:center;justify-content:center;padding:0 6px}
+.gps{font-size:14px;font-weight:700;padding:7px 10px;border-radius:14px;background:rgba(255,255,255,.18);white-space:nowrap;cursor:pointer}
+.gps.ok{background:#1b8a3a}.gps.mid{background:#b86e00}.gps.bad{background:#c62828}
+main{padding:12px 12px 150px;max-width:720px;margin:0 auto}
+.card{background:var(--card);border-radius:14px;padding:12px;margin:0 0 10px;box-shadow:0 1px 2px rgba(0,0,0,.07)}
+.btn{display:inline-flex;align-items:center;justify-content:center;gap:6px;min-height:48px;padding:0 14px;border-radius:12px;border:1px solid var(--line);background:var(--card);font-weight:600;color:var(--ink);text-align:center;-webkit-user-select:none;user-select:none}
+.btn.pri{background:var(--acc);border-color:var(--acc);color:var(--accInk)}
+.btn.big{width:100%;min-height:56px;font-size:18px}
+.btn.red{color:var(--bad)}
+.btn:disabled{opacity:.45}
+.row{display:flex;gap:8px;align-items:center}
+.row>.btn{flex:1}
+.grid{display:grid;gap:8px}
+.mut{color:var(--mut)}
+.small{font-size:14px}
+h2{font-size:14px;text-transform:uppercase;letter-spacing:.04em;color:var(--mut);margin:18px 4px 8px}
+.it{display:flex;gap:10px;align-items:center;background:var(--card);border-radius:12px;padding:10px;margin-bottom:8px;cursor:pointer}
+.badge{min-width:44px;height:44px;padding:0 6px;border-radius:10px;display:flex;align-items:center;justify-content:center;font-weight:700;color:#fff;flex:none}
+.it .tx{flex:1;min-width:0}
+.it .t1{font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.it .t2{font-size:14px;color:var(--mut)}
+.chips{display:flex;flex-wrap:wrap;gap:8px}
+.chip{border:0;background:var(--chip);border-radius:20px;padding:8px 14px;min-height:42px;font-size:16px}
+.chip.on{background:var(--acc);color:var(--accInk);font-weight:600}
+.fl{margin:14px 2px 6px;font-size:14px;color:var(--mut);font-weight:600}
+input.tx,textarea{width:100%;border:1px solid var(--line);border-radius:10px;padding:11px 12px;background:var(--card);font-size:17px;-webkit-appearance:none;appearance:none}
+textarea{min-height:96px;resize:vertical}
+.slots{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.slot{position:relative;aspect-ratio:4/3;border:2px dashed var(--line);border-radius:12px;display:flex;flex-direction:column;gap:4px;align-items:center;justify-content:center;text-align:center;padding:6px;font-size:14px;color:var(--mut);overflow:hidden;background:var(--card);cursor:pointer}
+.slot.has{border:2px solid var(--ok);padding:0}
+.slot img{position:absolute;inset:0;width:100%;height:100%;object-fit:cover}
+.slot .cap{position:absolute;left:0;right:0;bottom:0;background:rgba(0,0,0,.62);color:#fff;font-size:13px;padding:3px 6px;text-align:left;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.slot .n{position:absolute;right:6px;top:6px;background:rgba(0,0,0,.65);color:#fff;border-radius:10px;padding:1px 8px;font-size:13px}
+.coord{font-variant-numeric:tabular-nums;font-size:18px}
+.tabs{position:fixed;left:0;right:0;bottom:0;z-index:40;background:var(--card);border-top:1px solid var(--line);display:flex;padding-bottom:env(safe-area-inset-bottom)}
+.tabs button{flex:1;border:0;background:none;min-height:56px;font-size:12px;color:var(--mut);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px}
+.tabs button.on{color:var(--acc);font-weight:700}
+.fab{position:fixed;left:0;right:0;z-index:35;display:flex;gap:8px;padding:0 12px;bottom:calc(66px + env(safe-area-inset-bottom));max-width:720px;margin:0 auto}
+.fab.low{bottom:calc(12px + env(safe-area-inset-bottom))}
+.fab .btn{box-shadow:0 4px 14px rgba(0,0,0,.22)}
+.sheet-bg{position:fixed;inset:0;background:var(--shade);z-index:2000;display:flex;align-items:flex-end;justify-content:center}
+.sheet{background:var(--bg);width:100%;max-width:720px;max-height:90vh;max-height:90dvh;overflow:auto;-webkit-overflow-scrolling:touch;border-radius:16px 16px 0 0;padding:16px 12px calc(16px + env(safe-area-inset-bottom))}
+.sheet h3{margin:0 0 10px;font-size:19px}
+.toast{position:fixed;left:12px;right:12px;bottom:calc(130px + env(safe-area-inset-bottom));z-index:3000;background:#1d2a36;color:#fff;border-radius:12px;padding:12px 14px;font-size:15px;box-shadow:0 6px 20px rgba(0,0,0,.3);max-width:696px;margin:0 auto}
+#mapwrap{position:fixed;left:0;right:0;top:56px;bottom:calc(57px + env(safe-area-inset-bottom));z-index:20;display:none;background:#dde3e8}
+#map{position:absolute;inset:0}
+.mapbar{position:absolute;z-index:1000;display:flex;gap:6px}
+.mapbar.tr{top:10px;right:10px}
+.mapbar.br{bottom:12px;right:10px;flex-direction:column}
+.mapbar button{border:0;border-radius:10px;background:rgba(255,255,255,.95);color:#13202c;min-height:40px;min-width:44px;padding:0 10px;font-weight:600;font-size:14px;box-shadow:0 1px 5px rgba(0,0,0,.3)}
+.mapbar.br button{font-size:22px}
+.mapbar button.on{background:#0b63c5;color:#fff}
+#cross{position:absolute;left:50%;top:50%;width:44px;height:44px;margin:-22px 0 0 -22px;z-index:900;pointer-events:none}
+#cross:before,#cross:after{content:"";position:absolute;background:#e53935;box-shadow:0 0 0 1px #fff}
+#cross:before{left:21px;top:0;width:2px;height:44px}
+#cross:after{top:21px;left:0;height:2px;width:44px}
+#placebar{position:absolute;left:10px;right:10px;bottom:12px;z-index:1000;margin:0}
+.mk-pt span,.mk-task span,.mk-span span{display:block;transform:translate(-50%,-50%);white-space:nowrap;text-align:center}
+.mk-pt span{min-width:28px;height:28px;padding:0 6px;border-radius:14px;color:#fff;font:700 14px/24px -apple-system,Arial,sans-serif;border:2px solid #fff;box-shadow:0 1px 4px rgba(0,0,0,.45)}
+.mk-task span{padding:2px 6px;border-radius:6px;background:#fff;color:#0b63c5;border:2px solid #0b63c5;font:700 13px/16px -apple-system,Arial,sans-serif}
+.mk-span span{background:rgba(255,255,255,.92);color:#111;border-radius:4px;padding:1px 4px;font:600 12px/14px -apple-system,Arial,sans-serif}
+details summary{cursor:pointer}
+ol{padding-left:22px;margin:8px 0}
+li{margin:5px 0}
+</style>
+</head>
+<body>
+<div id="app"></div>
+<div id="mapwrap">
+  <div id="map"></div>
+  <div class="mapbar tr"><button data-a="map-base" data-b="2gis">2ГИС</button><button data-a="map-base" data-b="osm">OSM</button><button data-a="map-base" data-b="sat">Спутник</button></div>
+  <div class="mapbar br"><button data-a="map-me" aria-label="Где я">◎</button><button data-a="map-fit" aria-label="Показать всё">⤢</button></div>
+  <div id="cross" hidden></div>
+  <div id="placebar" class="card" hidden></div>
+</div>
+<input type="file" id="inCam" class="vh" accept="image/*" capture="environment">
+<input type="file" id="inGal" class="vh" accept="image/*" multiple>
+<input type="file" id="inTask" class="vh">
+<script>
+'use strict';
+// Обследование трассы ВОЛС — РНД-Строй. Один файл, без сервера: данные в телефоне (IndexedDB), выгрузка ZIP.
+const VER = '1.0 · 27.10.2026';
+const DECL = 8.5;            // магнитное склонение, Ростов-на-Дону, ° к востоку (азимут по компасу + DECL = истинный)
+
+const $ = (s, r = document) => r.querySelector(s);
+const $$ = (s, r = document) => [...r.querySelectorAll(s)];
+const esc = s => String(s == null ? '' : s).replace(/[&<>"']/g, c => ({'&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'}[c]));
+const uid = () => Date.now().toString(36) + Math.random().toString(36).slice(2, 8);
+const pad = (n, k = 2) => String(n).padStart(k, '0');
+const fmtT = t => { const d = new Date(t); return pad(d.getHours()) + ':' + pad(d.getMinutes()); };
+const fmtD = t => { const d = new Date(t); return pad(d.getDate()) + '.' + pad(d.getMonth() + 1) + '.' + d.getFullYear(); };
+const fmtM = m => m == null || !isFinite(m) ? '—' : m < 10 ? String(Math.round(m * 10) / 10).replace('.', ',') : String(Math.round(m));
+const fmtDist = m => m < 1000 ? Math.round(m) + ' м' : (m / 1000).toFixed(1).replace('.', ',') + ' км';
+const fmtMB = b => (b / 1048576).toFixed(b < 10485760 ? 1 : 0).replace('.', ',') + ' МБ';
+const code = p => 'T' + pad(p.n);
+
+const SET = (() => { let s = {}; try { s = JSON.parse(localStorage.getItem('obsled-set') || '{}'); } catch (e) {} return Object.assign({photoMax: 2560, base: '2gis'}, s); })();
+function saveSet() { try { localStorage.setItem('obsled-set', JSON.stringify(SET)); } catch (e) {} }
+
+// ---------------------------------------------------------------- типы точек, отметки, фото по списку
+const TYPES = {
+  opora:   {name: 'Опора',       col: '#0b63c5', line: true,  slots: ['Опора целиком', 'Табличка, номер', 'Верх: провода, крепления', 'Вперёд по трассе']},
+  muf:     {name: 'Муфта',       col: '#7b3fb8', line: true,  slots: ['Муфта', 'Бирка', 'Опора целиком', 'Ввод кабелей, запас']},
+  perehod: {name: 'Переход',     col: '#d06a00', line: false, slots: ['Поперёк дороги', 'Опора напротив', 'Вдоль дороги']},
+  nov:     {name: 'Новая опора', col: '#c62828', line: true,  slots: ['Место', 'Вперёд по трассе']},
+  kolodec: {name: 'Колодец',     col: '#795548', line: false, slots: ['Люк', 'Внутри', 'Каналы']},
+  bs:      {name: 'БС / ввод',   col: '#1b8a3a', line: true,  slots: ['Опора БС, здание', 'Шкаф, ввод', 'Подход кабеля', 'Проезд, ворота']},
+  zam:     {name: 'Заметка',     col: '#607d8b', line: false, slots: ['Фото']},
+};
+const MORE = 'Ещё';
+const FORMS = {
+  opora: [
+    {k: 'tab', t: 'text', l: 'Номер, надпись на табличке'},
+    {k: 'vlad', t: 'one', l: 'Чья опора', o: ['Донэнерго', 'Ростгорсвет', 'Связь', 'Другая', 'Не видно']},
+    {k: 'tip', t: 'one', l: 'Тип', o: ['Ж/б 0,4 кВ', 'Ж/б 6–10 кВ', 'Освещение', 'Связь', 'Металл', 'Дерево']},
+    {k: 'vys', t: 'one', l: 'Высота, м', o: ['8', '9,5', '10', '11', '12+', '?']},
+    {k: 'sost', t: 'one', l: 'Состояние', o: ['Норма', 'Наклон', 'Трещины', 'Плохое']},
+    {k: 'kab', t: 'one', l: 'Кабелей связи уже висит', o: ['0', '1', '2', '3', '4', '5+']},
+    {k: 'mesto', t: 'one', l: 'Место под наш кабель', o: ['Есть', 'Тесно', 'Нет']},
+    {k: 'ugol', t: 'one', l: 'Угловая', o: ['Нет', 'Да, есть подкос', 'Да, без подкоса']},
+    {k: 'pom', t: 'many', l: 'Помехи в пролёте', o: ['Деревья', 'Ввод в дом', 'Растяжка', 'Въезд, ворота', 'Реклама']},
+    {k: 'per', t: 'one', l: 'Отсюда переход через дорогу', o: ['Нет', 'Да']},
+    {k: 'shir', t: 'num', l: 'Ширина дороги, м', iff: f => f.per === 'Да'},
+  ],
+  muf: [
+    {k: 'tab', t: 'text', l: 'Номер опоры, табличка'},
+    {k: 'marka', t: 'text', l: 'Марка муфты'},
+    {k: 'birka', t: 'text', l: 'Чья муфта (бирка)'},
+    {k: 'kab', t: 'text', l: 'Кабели — сколько, куда уходят'},
+    {k: 'vvod', t: 'one', l: 'Свободный ввод', o: ['Есть', 'Нет', '?']},
+    {k: 'zap', t: 'one', l: 'Место под запас 15 м', o: ['Есть', 'Нет']},
+  ],
+  perehod: [
+    {k: 'ul', t: 'text', l: 'Улица'},
+    {k: 'shir', t: 'num', l: 'Ширина проезжей части, м'},
+    {k: 'opory', t: 'one', l: 'Опоры', o: ['С двух сторон', 'С одной', 'Нет']},
+    {k: 'vys', t: 'one', l: 'Провода над дорогой', o: ['Выше 6 м', 'Ниже 6 м', '?']},
+    {k: 'pom', t: 'many', l: 'Помехи', o: ['Светофор', 'Трамвай, троллейбус', 'Деревья']},
+  ],
+  nov: [
+    {k: 'poch', t: 'text', l: 'Почему нужна'},
+    {k: 'grunt', t: 'one', l: 'Покрытие', o: ['Грунт', 'Асфальт', 'Плитка', 'Газон']},
+  ],
+  kolodec: [
+    {k: 'nom', t: 'text', l: 'Номер, чей'},
+    {k: 'tip', t: 'one', l: 'Тип', o: ['ККС-1', 'ККС-2', 'ККС-3', 'ККС-4', 'ККС-5', 'Другой']},
+    {k: 'sost', t: 'one', l: 'Состояние', o: ['Норма', 'Залит', 'Повреждён', 'Не открыть']},
+    {k: 'kan', t: 'text', l: 'Каналы — свободные, занятые'},
+  ],
+  bs: [
+    {k: 'vys', t: 'num', l: 'Высота крепления кабеля, м'},
+    {k: 'spusk', t: 'text', l: 'Спуск к шкафу — как, длина'},
+    {k: 'vvod', t: 'one', l: 'Свободный гермоввод', o: ['Есть', 'Нет', '?']},
+    {k: 'kross', t: 'one', l: 'Место под кросс', o: ['Есть', 'Нет', '?']},
+    {k: 'dost', t: 'text', l: 'Проезд, ворота, кто открывает'},
+  ],
+  zam: [],
+};
+const COPY_KEYS = ['vlad', 'tip', 'vys', 'sost', 'kab', 'mesto'];
+
+const ICO = {
+  list: '<svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 6h16M4 12h16M4 18h16"/></svg>',
+  map: '<svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"><path d="M9 4 3 6v14l6-2 6 2 6-2V4l-6 2-6-2zM9 4v14M15 6v14"/></svg>',
+  task: '<svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"><path d="M5 21V4h11l-2 4 2 4H5"/></svg>',
+  exp: '<svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v12M7 8l5-5 5 5M5 21h14"/></svg>',
+  cam: '<svg viewBox="0 0 24 24" width="32" height="32" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"><path d="M4 8h3l2-3h6l2 3h3v11H4z"/><circle cx="12" cy="13" r="3.5"/></svg>',
+};
+
+// ---------------------------------------------------------------- геометрия
+const RAD = Math.PI / 180, RE = 6371008.8;
+function dist(a, b) {
+  const dLa = (b.lat - a.lat) * RAD, dLo = (b.lon - a.lon) * RAD;
+  const s = Math.sin(dLa / 2) ** 2 + Math.cos(a.lat * RAD) * Math.cos(b.lat * RAD) * Math.sin(dLo / 2) ** 2;
+  return 2 * RE * Math.asin(Math.min(1, Math.sqrt(s)));
+}
+function shift(lat, lon, az, d) {
+  const b = az * RAD;
+  return {lat: lat + d * Math.cos(b) / RE / RAD, lon: lon + d * Math.sin(b) / (RE * Math.cos(lat * RAD)) / RAD};
+}
+// где стоит сама опора: у опоры — точка съёмки, в стороне — сдвиг по азимуту и расстоянию
+function pos(p) {
+  if (!p || p.lat == null || p.lon == null) return null;
+  if (p.mode === 's' && p.az != null && p.d > 0) return shift(p.lat, p.lon, p.az + DECL, p.d);
+  return {lat: p.lat, lon: p.lon};
+}
+function span(p) {
+  if (!TYPES[p.type] || !TYPES[p.type].line) return null;
+  const a = pos(p); if (!a) return null;
+  const i = S.pts.indexOf(p);
+  for (let j = i - 1; j >= 0; j--) {
+    const q = S.pts[j];
+    if (TYPES[q.type] && TYPES[q.type].line) { const b = pos(q); return b ? dist(a, b) : null; }
+  }
+  return null;
+}
+function nearTask(q, max = 60) {
+  const t = S.survey && S.survey.task; if (!t || !q) return null;
+  let best = null;
+  for (const x of t.points) { const d = dist(q, x); if (!best || d < best.d) best = {x, d}; }
+  return best && best.d <= max ? best : null;
+}
+
+// ---------------------------------------------------------------- база в телефоне
+const DB = {
+  d: null,
+  open() {
+    return new Promise((res, rej) => {
+      let r;
+      try { r = indexedDB.open('rnd-obsled', 1); } catch (e) { rej(e); return; }
+      r.onupgradeneeded = () => {
+        const d = r.result;
+        if (!d.objectStoreNames.contains('surveys')) d.createObjectStore('surveys', {keyPath: 'id'});
+        if (!d.objectStoreNames.contains('points')) d.createObjectStore('points', {keyPath: 'id'}).createIndex('survey', 'survey');
+        if (!d.objectStoreNames.contains('files')) { const f = d.createObjectStore('files', {keyPath: 'id'}); f.createIndex('survey', 'survey'); f.createIndex('point', 'point'); }
+        if (!d.objectStoreNames.contains('thumbs')) d.createObjectStore('thumbs', {keyPath: 'id'});
+      };
+      r.onsuccess = () => { this.d = r.result; this.d.onversionchange = () => this.d.close(); res(); };
+      r.onerror = () => rej(r.error || new Error('IndexedDB'));
+      r.onblocked = () => rej(new Error('база занята — закройте другие вкладки с программой'));
+    });
+  },
+  req(store, mode, fn) {
+    return new Promise((res, rej) => {
+      let t;
+      try { t = this.d.transaction(store, mode); } catch (e) { rej(e); return; }
+      let out;
+      const q = fn(t.objectStore(store));
+      if (q) q.onsuccess = () => { out = q.result; };
+      t.oncomplete = () => res(out);
+      t.onerror = () => rej(t.error || new Error('запись не прошла'));
+      t.onabort = () => rej(t.error || new Error('запись прервана'));
+    });
+  },
+  get(s, id) { return this.req(s, 'readonly', o => o.get(id)); },
+  put(s, v) { return this.req(s, 'readwrite', o => o.put(v)); },
+  del(s, id) { return this.req(s, 'readwrite', o => o.delete(id)); },
+  all(s) { return this.req(s, 'readonly', o => o.getAll()); },
+  by(s, ix, k) { return this.req(s, 'readonly', o => o.index(ix).getAll(k)); },
+  keys(s, ix, k) { return this.req(s, 'readonly', o => o.index(ix).getAllKeys(k)); },
+};
+const errMsg = e => e && e.name === 'QuotaExceededError' ? 'память телефона для программы заполнена — выгрузите архив' : (e && e.message) || String(e);
+
+// ---------------------------------------------------------------- состояние
+const S = {view: 'home', tab: 'pts', sid: null, survey: null, pts: [], pid: null, zip: null, pend: null, place: null, focus: null, busy: false};
+const curPt = () => S.pts.find(p => p.id === S.pid) || null;
+const st = d => ({view: S.view, sid: S.sid, pid: S.pid, tab: S.tab, d});
+const depth = () => (history.state && history.state.d) || 0;
+
+let lastSvSave = 0;
+function saveSurvey() { S.survey.upd = Date.now(); lastSvSave = Date.now(); return DB.put('surveys', S.survey); }
+function savePoint(p) {
+  p.upd = Date.now(); S.zip = null;
+  if (S.survey && Date.now() - lastSvSave > 5000) saveSurvey().catch(() => {});
+  return DB.put('points', p).catch(e => { toast('Не сохранилось: ' + errMsg(e), 7000); throw e; });
+}
+let saveT = null, saveP = null;
+function queueSave(p) { saveP = p; clearTimeout(saveT); saveT = setTimeout(flushSave, 500); }
+function flushSave() { clearTimeout(saveT); saveT = null; if (saveP) { const p = saveP; saveP = null; savePoint(p).catch(() => {}); } }
+
+async function loadSurvey(id) {
+  const s = await DB.get('surveys', id);
+  if (!s) throw new Error('обследование не найдено');
+  S.sid = id; S.survey = s;
+  S.pts = (await DB.by('points', 'survey', id)).sort((a, b) => a.n - b.n);
+  S.zip = null; S.place = null; MAP.fitted = null;
+}
+async function openSurvey(id) { await loadSurvey(id); S.tab = 'pts'; go('survey', {pid: null}); }
+async function newSurvey(name, task) {
+  const s = {id: uid(), name, cr: Date.now(), upd: Date.now(), task: task || null};
+  await DB.put('surveys', s);
+  if (navigator.storage && navigator.storage.persist) navigator.storage.persist().catch(() => {});
+  await openSurvey(s.id);
+}
+
+// ---------------------------------------------------------------- GPS и компас
+const GPS = {
+  last: null, err: null, w: null, subs: new Set(),
+  start() {
+    if (this.w != null) return;
+    if (!navigator.geolocation) { this.err = {code: 0, message: 'нет GPS в браузере'}; this.emit(); return; }
+    this.w = navigator.geolocation.watchPosition(p => {
+      const c = p.coords;
+      this.last = {lat: c.latitude, lon: c.longitude, acc: c.accuracy, alt: c.altitude, t: Date.now()};
+      this.err = null; this.emit();
+    }, e => { this.err = e; this.emit(); }, {enableHighAccuracy: true, maximumAge: 0, timeout: 30000});
+  },
+  stop() { if (this.w != null) { navigator.geolocation.clearWatch(this.w); this.w = null; } },
+  emit() {
+    for (const f of this.subs) { try { f(this.last); } catch (e) { console.error(e); } }
+    updGps();
+    if (S.view === 'survey' && S.tab === 'map') MAP.drawMe();
+  },
+  fresh(age = 15000) { return this.last && Date.now() - this.last.t < age ? this.last : null; },
+};
+function updGps() {
+  const el = $('#gps'); if (!el) return;
+  const g = GPS.fresh();
+  let c = 'gps', t;
+  if (g) { c += g.acc <= 8 ? ' ok' : g.acc <= 20 ? ' mid' : ' bad'; t = 'GPS ±' + fmtM(g.acc) + ' м'; }
+  else if (GPS.err && GPS.err.code === 1) { c += ' bad'; t = 'GPS запрещён'; }
+  else t = GPS.w == null ? 'GPS выкл' : 'GPS ищет…';
+  el.className = c; el.textContent = t;
+}
+setInterval(updGps, 2000);
+
+// среднее по замерам: лучшие по точности, без выбросов
+function avgFix(sm) {
+  const best = sm.reduce((a, s) => s.acc < a.acc ? s : a);
+  const use = sm.filter(s => s.acc <= Math.max(best.acc * 1.5, best.acc + 3) && dist(s, best) <= Math.max(8, 1.5 * (s.acc + best.acc)));
+  let w = 0, la = 0, lo = 0, al = 0, aw = 0;
+  for (const s of use) {
+    const k = 1 / Math.max(s.acc, 1) ** 2; w += k; la += s.lat * k; lo += s.lon * k;
+    if (s.alt != null) { al += s.alt * k; aw += k; }
+  }
+  return {lat: la / w, lon: lo / w, acc: best.acc, alt: aw ? al / aw : null, n: use.length, t: Math.max(...use.map(s => s.t))};
+}
+// уточнение точки: 10 с замеров после первого, если человек стоит у опоры
+const Refine = {
+  pid: null, sm: [], t0: 0, first: 0, timer: null, fn: null,
+  start(pid) {
+    this.stop(true);
+    this.pid = pid; this.sm = []; this.t0 = Date.now(); this.first = 0;
+    this.fn = g => { if (g) this.add(g); };
+    GPS.subs.add(this.fn);
+    const g = GPS.fresh(4000); if (g) this.add(g);
+    this.timer = setInterval(() => {
+      const now = Date.now();
+      if ((this.first && now - this.first > 10000) || now - this.t0 > 45000) this.stop();
+    }, 500);
+    updCoord(S.pts.find(q => q.id === pid));
+  },
+  add(g) {
+    const last = this.sm[this.sm.length - 1];
+    if (last && last.t === g.t) return;
+    if (this.sm.length) { const fx = avgFix(this.sm); if (dist(fx, g) > Math.max(10, 1.5 * (fx.acc + g.acc))) return; }
+    this.sm.push(g); if (!this.first) this.first = Date.now();
+    const p = S.pts.find(q => q.id === this.pid); if (!p) return;
+    const fx = avgFix(this.sm);
+    Object.assign(p, {lat: fx.lat, lon: fx.lon, acc: fx.acc, alt: fx.alt, fixN: fx.n, fixT: fx.t, src: 'gps'});
+    savePoint(p).catch(() => {}); updCoord(p);
+  },
+  stop(silent) {
+    if (this.fn) GPS.subs.delete(this.fn);
+    this.fn = null; clearInterval(this.timer); this.timer = null;
+    const pid = this.pid; this.pid = null;
+    if (!silent && pid) updCoord(S.pts.find(q => q.id === pid));
+  },
+};
+const COMPASS = {
+  h: null, acc: null, t: 0, on: false, subs: new Set(),
+  request() {            // вызывать прямо в обработчике нажатия (iPhone спрашивает разрешение)
+    if (this.on) return Promise.resolve(true);
+    const attach = () => {
+      const f = e => this.ev(e);
+      window.addEventListener('deviceorientation', f, true);
+      window.addEventListener('deviceorientationabsolute', f, true);
+      this.on = true; return true;
+    };
+    try {
+      if (typeof DeviceOrientationEvent !== 'undefined' && typeof DeviceOrientationEvent.requestPermission === 'function')
+        return DeviceOrientationEvent.requestPermission().then(r => r === 'granted' ? attach() : false, () => false);
+      return Promise.resolve(typeof DeviceOrientationEvent !== 'undefined' ? attach() : false);
+    } catch (e) { return Promise.resolve(false); }
+  },
+  ev(e) {
+    let h = null;
+    if (typeof e.webkitCompassHeading === 'number' && isFinite(e.webkitCompassHeading)) { h = e.webkitCompassHeading; this.acc = e.webkitCompassAccuracy; }
+    else if ((e.absolute || e.type === 'deviceorientationabsolute') && e.alpha != null) h = (360 - e.alpha) % 360;
+    if (h == null) return;
+    this.h = h; this.t = Date.now();
+    for (const f of this.subs) f(h);
+  },
+  fresh() { return this.h != null && Date.now() - this.t < 3000 ? this.h : null; },
+};
+
+// ---------------------------------------------------------------- фото: сжатие и координаты внутрь снимка (EXIF)
+const CNV = document.createElement('canvas');
+function loadImg(blob) {
+  return new Promise((res, rej) => {
+    const url = URL.createObjectURL(blob), img = new Image();
+    img.onload = () => res({img, url});
+    img.onerror = () => { URL.revokeObjectURL(url); rej(new Error('фото не читается')); };
+    img.src = url;
+  });
+}
+function toJpeg(img, maxSide, q) {
+  const w0 = img.naturalWidth, h0 = img.naturalHeight;
+  const k = Math.min(1, maxSide / Math.max(w0, h0));
+  const w = Math.max(1, Math.round(w0 * k)), h = Math.max(1, Math.round(h0 * k));
+  CNV.width = w; CNV.height = h;
+  const g = CNV.getContext('2d');
+  g.imageSmoothingEnabled = true; g.imageSmoothingQuality = 'high';
+  g.drawImage(img, 0, 0, w, h);
+  return new Promise((res, rej) => CNV.toBlob(b => b ? res({blob: b, w, h}) : rej(new Error('не удалось сжать фото')), 'image/jpeg', q));
+}
+function concat(arrs) { let n = 0; for (const a of arrs) n += a.length; const o = new Uint8Array(n); let p = 0; for (const a of arrs) { o.set(a, p); p += a.length; } return o; }
+const BE = (n, b) => { const a = new Uint8Array(b); for (let i = b - 1; i >= 0; i--) { a[i] = n % 256; n = Math.floor(n / 256); } return a; };
+const xASC = s => ({type: 2, count: s.length + 1, bytes: Uint8Array.from([...s].map(c => c.charCodeAt(0) & 127).concat([0]))});
+const xSHORT = v => ({type: 3, count: 1, bytes: BE(v, 2)});
+const xLONG = v => ({type: 4, count: 1, bytes: BE(v, 4)});
+const xBYTE = arr => ({type: 1, count: arr.length, bytes: Uint8Array.from(arr)});
+const xRAT = (...pr) => ({type: 5, count: pr.length, bytes: concat(pr.map(([a, b]) => concat([BE(a, 4), BE(b, 4)])))});
+function tiffIFD(entries, off) {
+  entries = entries.slice().sort((a, b) => a.tag - b.tag);
+  const n = entries.length, head = 2 + n * 12 + 4;
+  let extra = 0; for (const e of entries) if (e.bytes.length > 4) extra += e.bytes.length + (e.bytes.length & 1);
+  const out = new Uint8Array(head + extra), dv = new DataView(out.buffer);
+  dv.setUint16(0, n);
+  let p = 2, q = head;
+  for (const e of entries) {
+    dv.setUint16(p, e.tag); dv.setUint16(p + 2, e.type); dv.setUint32(p + 4, e.count);
+    if (e.bytes.length <= 4) out.set(e.bytes, p + 8);
+    else { dv.setUint32(p + 8, off + q); out.set(e.bytes, q); q += e.bytes.length + (e.bytes.length & 1); }
+    p += 12;
+  }
+  dv.setUint32(p, 0);
+  return out;
+}
+function exifBlock(m) {
+  const d = new Date(m.t || Date.now());
+  const dt = `${d.getFullYear()}:${pad(d.getMonth() + 1)}:${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`;
+  const tz = -d.getTimezoneOffset(), ofs = (tz >= 0 ? '+' : '-') + pad(Math.floor(Math.abs(tz) / 60)) + ':' + pad(Math.abs(tz) % 60);
+  const hasG = m.lat != null && m.lon != null && isFinite(m.lat) && isFinite(m.lon);
+  const ifd0 = [{tag: 0x0112, ...xSHORT(1)}, {tag: 0x0131, ...xASC('RND-Stroy Obsledovanie 1.0')}, {tag: 0x0132, ...xASC(dt)}, {tag: 0x8769, ...xLONG(0)}];
+  if (hasG) ifd0.push({tag: 0x8825, ...xLONG(0)});
+  const exif = [{tag: 0x9003, ...xASC(dt)}, {tag: 0x9004, ...xASC(dt)}, {tag: 0x9011, ...xASC(ofs)}];
+  const offExif = 8 + tiffIFD(ifd0, 8).length;
+  const offGps = offExif + tiffIFD(exif, offExif).length;
+  ifd0.find(e => e.tag === 0x8769).bytes = BE(offExif, 4);
+  if (hasG) ifd0.find(e => e.tag === 0x8825).bytes = BE(offGps, 4);
+  const parts = [Uint8Array.from([0x4D, 0x4D, 0, 0x2A, 0, 0, 0, 8]), tiffIFD(ifd0, 8), tiffIFD(exif, offExif)];
+  if (hasG) {
+    const dms = v => {           // градусы-минуты-секунды, секунды с точностью 0,0001″
+      const tot = Math.round(Math.abs(v) * 36000000);
+      const dd = Math.floor(tot / 36000000), rem = tot - dd * 36000000, mm = Math.floor(rem / 600000), ss = rem - mm * 600000;
+      return xRAT([dd, 1], [mm, 1], [ss, 10000]);
+    };
+    const u = new Date(m.t || Date.now());
+    const g = [
+      {tag: 0x0000, ...xBYTE([2, 3, 0, 0])},
+      {tag: 0x0001, ...xASC(m.lat >= 0 ? 'N' : 'S')}, {tag: 0x0002, ...dms(m.lat)},
+      {tag: 0x0003, ...xASC(m.lon >= 0 ? 'E' : 'W')}, {tag: 0x0004, ...dms(m.lon)},
+      {tag: 0x0007, ...xRAT([u.getUTCHours(), 1], [u.getUTCMinutes(), 1], [u.getUTCSeconds(), 1])},
+      {tag: 0x001D, ...xASC(`${u.getUTCFullYear()}:${pad(u.getUTCMonth() + 1)}:${pad(u.getUTCDate())}`)},
+    ];
+    if (m.alt != null && isFinite(m.alt)) g.push({tag: 0x0005, ...xBYTE([m.alt < 0 ? 1 : 0])}, {tag: 0x0006, ...xRAT([Math.round(Math.abs(m.alt) * 100), 100])});
+    if (m.dir != null && isFinite(m.dir)) g.push({tag: 0x0010, ...xASC('M')}, {tag: 0x0011, ...xRAT([Math.round(((m.dir % 360) + 360) % 360 * 100), 100])});
+    if (m.acc != null && isFinite(m.acc)) g.push({tag: 0x001F, ...xRAT([Math.round(m.acc * 100), 100])});
+    parts.push(tiffIFD(g, offGps));
+  }
+  const tiff = concat(parts), L = 2 + 6 + tiff.length;
+  return concat([Uint8Array.from([0xFF, 0xE1, L >> 8, L & 255, 0x45, 0x78, 0x69, 0x66, 0, 0]), tiff]);
+}
+async function withExif(blob, m) {
+  const src = new Uint8Array(await blob.arrayBuffer());
+  if (src[0] !== 0xFF || src[1] !== 0xD8) return src.buffer;
+  let p = 2;      // убираем JFIF (APP0) и старый EXIF (APP1) в начале файла
+  while (p + 4 <= src.length && src[p] === 0xFF && (src[p + 1] === 0xE0 || src[p + 1] === 0xE1)) p += 2 + ((src[p + 2] << 8) | src[p + 3]);
+  return concat([Uint8Array.from([0xFF, 0xD8]), exifBlock(m), src.subarray(p)]).buffer;
+}
+async function addPhoto(p, file, pend) {
+  const now = Date.now();
+  const at = pend.gal ? null : (GPS.fresh(15000) || pend.g || (p.lat != null ? {lat: p.lat, lon: p.lon, acc: p.acc, alt: p.alt} : null));
+  const {img, url} = await loadImg(file);
+  try {
+    const big = await toJpeg(img, SET.photoMax, 0.86);
+    const th = await toJpeg(img, 360, 0.72);
+    const meta = {lat: at ? at.lat : null, lon: at ? at.lon : null, alt: at ? at.alt : null, acc: at ? at.acc : null, dir: pend.head, t: pend.gal ? (file.lastModified || now) : now};
+    const data = await withExif(big.blob, meta);
+    const id = uid();
+    await DB.put('files', {id, survey: p.survey, point: p.id, kind: 'photo', type: 'image/jpeg', data});
+    await DB.put('thumbs', {id, data: await th.blob.arrayBuffer()});
+    p.photos.push({id, slot: pend.slot, time: meta.t, w: big.w, h: big.h, size: data.byteLength, lat: meta.lat, lon: meta.lon, acc: meta.acc, dir: meta.dir, gal: !!pend.gal});
+    await savePoint(p);
+  } finally { URL.revokeObjectURL(url); CNV.width = 1; CNV.height = 1; }
+}
+async function onFiles(inp) {
+  const files = [...inp.files]; inp.value = '';
+  const pend = S.pend; S.pend = null;
+  if (!files.length || !pend) return;
+  const p = S.pts.find(q => q.id === pend.pid); if (!p) return;
+  for (let i = 0; i < files.length; i++) {
+    toast(`Сохраняю фото${files.length > 1 ? ` ${i + 1} из ${files.length}` : ''}…`, 30000);
+    try { await addPhoto(p, files[i], pend); }
+    catch (e) { console.error(e); toast('Фото не сохранилось: ' + errMsg(e), 8000); return; }
+  }
+  toast(files.length > 1 ? `Сохранено фото: ${files.length}` : 'Фото сохранено', 1800);
+  if (S.view === 'point' && S.pid === p.id) rr();
+}
+const TH = new Map(), AU = new Map();
+async function thumbURL(id) {
+  if (TH.has(id)) return TH.get(id);
+  const r = await DB.get('thumbs', id); if (!r) return '';
+  const u = URL.createObjectURL(new Blob([r.data], {type: 'image/jpeg'})); TH.set(id, u); return u;
+}
+function dropURL(id) { for (const M of [TH, AU]) if (M.has(id)) { URL.revokeObjectURL(M.get(id)); M.delete(id); } }
+async function fillMedia() {
+  for (const im of $$('img[data-th]')) { if (!im.getAttribute('src')) { const u = await thumbURL(im.dataset.th); if (u) im.src = u; } }
+  const p = S.view === 'point' && curPt();
+  if (p) for (const a of p.audio) if (!AU.has(a.id)) { const r = await DB.get('files', a.id); if (r) AU.set(a.id, URL.createObjectURL(new Blob([r.data], {type: a.type}))); }
+}
+
+// ---------------------------------------------------------------- голосовые заметки
+const REC = {
+  on: false, mr: null, st: null, ch: [], t0: 0, pid: null,
+  async start(p) {
+    if (!navigator.mediaDevices || !window.MediaRecorder) throw new Error('запись звука не поддерживается');
+    this.st = await navigator.mediaDevices.getUserMedia({audio: true});
+    const ty = ['audio/mp4', 'audio/aac', 'audio/webm;codecs=opus', 'audio/webm'].find(t => MediaRecorder.isTypeSupported && MediaRecorder.isTypeSupported(t));
+    this.mr = new MediaRecorder(this.st, ty ? {mimeType: ty} : {});
+    this.ch = []; this.mr.ondataavailable = e => { if (e.data && e.data.size) this.ch.push(e.data); };
+    this.mr.start(); this.on = true; this.t0 = Date.now(); this.pid = p.id;
+  },
+  stop() {
+    return new Promise(res => {
+      const mr = this.mr; if (!mr) { this.on = false; res(); return; }
+      mr.onstop = async () => {
+        try {
+          this.st.getTracks().forEach(t => t.stop());
+          const type = (mr.mimeType || 'audio/mp4').split(';')[0];
+          const blob = new Blob(this.ch, {type});
+          const p = S.pts.find(q => q.id === this.pid);
+          if (p && blob.size) {
+            const id = uid(), data = await blob.arrayBuffer();
+            await DB.put('files', {id, survey: p.survey, point: p.id, kind: 'audio', type, data});
+            p.audio.push({id, time: this.t0, dur: (Date.now() - this.t0) / 1000, size: data.byteLength, type});
+            await savePoint(p);
+          }
+        } catch (e) { toast('Запись не сохранилась: ' + errMsg(e), 6000); }
+        this.on = false; this.mr = null; res();
+      };
+      mr.stop();
+    });
+  },
+};
+let PLAY = null;
+
+// ---------------------------------------------------------------- задание: ссылка, KML, JSON
+function normTask(o) {
+  if (!o || typeof o !== 'object') throw new Error('не тот формат');
+  const num = v => { const x = Number(v); if (!isFinite(x)) throw new Error('неверные координаты'); return x; };
+  const rs = o.routes || (o.route ? [{name: 'Трасса', pts: o.route}] : []);
+  const routes = rs.map(r => ({name: String(r.name || 'Трасса'), pts: (Array.isArray(r) ? r : r.pts || []).map(a => [num(a[0]), num(a[1])])})).filter(r => r.pts.length > 1);
+  const points = (o.points || []).map((q, i) => ({n: String(q.n != null ? q.n : i + 1), name: String(q.name || ''), lat: num(q.lat), lon: num(q.lon), text: String(q.text || '')}));
+  return {name: String(o.name || 'Задание'), note: String(o.note || ''), routes, points};
+}
+function kmlToTask(text, fname) {
+  const doc = new DOMParser().parseFromString(text, 'application/xml');
+  if (doc.getElementsByTagName('parsererror').length) throw new Error('файл KML повреждён');
+  const parse = s => (s || '').trim().split(/\s+/).map(q => q.split(',').map(Number)).filter(a => a.length >= 2 && isFinite(a[0]) && isFinite(a[1])).map(a => [a[1], a[0]]);
+  const docEl = doc.getElementsByTagName('Document')[0];
+  let name = fname;
+  if (docEl) for (const c of docEl.children) if (c.localName === 'name') { name = c.textContent.trim() || fname; break; }
+  const t = {name, note: '', routes: [], points: []};
+  for (const pm of doc.getElementsByTagName('Placemark')) {
+    const nmEl = [...pm.children].find(c => c.localName === 'name'), dsEl = [...pm.children].find(c => c.localName === 'description');
+    const nm = nmEl ? nmEl.textContent.trim() : '', ds = dsEl ? dsEl.textContent.trim() : '';
+    for (const pt of pm.getElementsByTagName('Point')) {
+      const c = parse((pt.getElementsByTagName('coordinates')[0] || {}).textContent);
+      if (!c.length) continue;
+      const mm = /^\s*(\d+[а-яa-z]?)[.)]\s*(.*)$/i.exec(nm);
+      t.points.push({n: mm ? mm[1] : String(t.points.length + 1), name: mm ? mm[2] : nm, lat: c[0][0], lon: c[0][1], text: ds});
+    }
+    for (const ls of pm.getElementsByTagName('LineString')) {
+      const c = parse((ls.getElementsByTagName('coordinates')[0] || {}).textContent);
+      if (c.length > 1) t.routes.push({name: nm || 'Трасса', pts: c});
+    }
+  }
+  return t;
+}
+async function decodeTask(s) {
+  const m = /[#&?]([zt])=([A-Za-z0-9_-]+)/.exec(s);
+  if (!m) { const x = s.trim(); if (x.startsWith('{')) return normTask(JSON.parse(x)); if (x.startsWith('<')) return kmlToTask(x, 'Задание'); throw new Error('в тексте нет задания'); }
+  const b = m[2].replace(/-/g, '+').replace(/_/g, '/');
+  const bin = Uint8Array.from(atob(b + '='.repeat((4 - b.length % 4) % 4)), c => c.charCodeAt(0));
+  let txt;
+  if (m[1] === 'z') {
+    if (typeof DecompressionStream === 'undefined') throw new Error('обновите iOS — нужна версия 16.4 или новее');
+    txt = await new Response(new Blob([bin]).stream().pipeThrough(new DecompressionStream('deflate-raw'))).text();
+  } else txt = new TextDecoder().decode(bin);
+  return normTask(JSON.parse(txt));
+}
+async function useTask(t) {
+  if (!t.points.length && !t.routes.length) { toast('В задании нет точек и линий'); return; }
+  if (S.view !== 'home' && S.survey) {
+    S.survey.task = t; await saveSurvey(); MAP.fitted = null; S.tab = 'task';
+    history.replaceState(st(depth()), ''); render();
+    toast(`Задание загружено: пунктов ${t.points.length}`);
+    return;
+  }
+  const ex = (await DB.all('surveys')).find(s => s.task && s.task.name === t.name);
+  if (ex && confirm(`Обследование «${ex.name}» по этому заданию уже есть. Открыть его?\n\n«Отменить» — начать новое.`)) { await openSurvey(ex.id); return; }
+  await newSurvey(t.name, t);
+}
+
+// ---------------------------------------------------------------- выгрузка: ZIP (без сжатия — фото и так сжаты)
+const CRC = (() => { const t = new Uint32Array(256); for (let n = 0; n < 256; n++) { let c = n; for (let k = 0; k < 8; k++) c = c & 1 ? 0xEDB88320 ^ (c >>> 1) : c >>> 1; t[n] = c >>> 0; } return t; })();
+function crc32(u) { let c = 0xFFFFFFFF; for (let i = 0; i < u.length; i++) c = CRC[(c ^ u[i]) & 255] ^ (c >>> 8); return (c ^ 0xFFFFFFFF) >>> 0; }
+async function makeZip(files, prog) {
+  const enc = new TextEncoder(), parts = [], cd = [];
+  let off = 0;
+  for (let i = 0; i < files.length; i++) {
+    const f = files[i];
+    const u = typeof f.data === 'string' ? enc.encode(f.data) : f.data instanceof ArrayBuffer ? new Uint8Array(f.data) : f.data;
+    const nm = enc.encode(f.name), crc = crc32(u), d = f.date || new Date();
+    const tm = (d.getHours() << 11) | (d.getMinutes() << 5) | (d.getSeconds() >> 1), dt = ((d.getFullYear() - 1980) << 9) | ((d.getMonth() + 1) << 5) | d.getDate();
+    const lh = new Uint8Array(30 + nm.length), v = new DataView(lh.buffer);
+    v.setUint32(0, 0x04034b50, true); v.setUint16(4, 20, true); v.setUint16(6, 0x0800, true); v.setUint16(8, 0, true);
+    v.setUint16(10, tm, true); v.setUint16(12, dt, true); v.setUint32(14, crc, true); v.setUint32(18, u.length, true); v.setUint32(22, u.length, true);
+    v.setUint16(26, nm.length, true); v.setUint16(28, 0, true); lh.set(nm, 30);
+    parts.push(lh, u);
+    const ch = new Uint8Array(46 + nm.length), w = new DataView(ch.buffer);
+    w.setUint32(0, 0x02014b50, true); w.setUint16(4, 20, true); w.setUint16(6, 20, true); w.setUint16(8, 0x0800, true); w.setUint16(10, 0, true);
+    w.setUint16(12, tm, true); w.setUint16(14, dt, true); w.setUint32(16, crc, true); w.setUint32(20, u.length, true); w.setUint32(24, u.length, true);
+    w.setUint16(28, nm.length, true); w.setUint32(42, off, true); ch.set(nm, 46);
+    cd.push(ch); off += lh.length + u.length;
+    if (prog && (i % 4 === 3 || i === files.length - 1)) { prog(i + 1, files.length); await new Promise(r => setTimeout(r, 0)); }
+  }
+  const cdSize = cd.reduce((a, c) => a + c.length, 0);
+  const end = new Uint8Array(22), e = new DataView(end.buffer);
+  e.setUint32(0, 0x06054b50, true); e.setUint16(8, files.length, true); e.setUint16(10, files.length, true); e.setUint32(12, cdSize, true); e.setUint32(16, off, true);
+  return new Blob([...parts, ...cd, end], {type: 'application/zip'});
+}
+function fieldsText(p) {
+  const F = FORMS[p.type] || [], f = p.f || {};
+  return F.filter(d => { const v = f[d.k]; return Array.isArray(v) ? v.length : v != null && String(v).trim() !== ''; })
+    .map(d => d.l + ': ' + (Array.isArray(f[d.k]) ? f[d.k].join(', ') : String(f[d.k]).trim())).join('; ');
+}
+function kmlOut(o) {
+  const col = c => 'ff' + c.slice(5, 7) + c.slice(3, 5) + c.slice(1, 3);
+  const c7 = v => v.toFixed(7);
+  let k = `<?xml version="1.0" encoding="UTF-8"?>\n<kml xmlns="http://www.opengis.net/kml/2.2"><Document><name>${esc(o.survey.name)}</name>`;
+  for (const [t, T] of Object.entries(TYPES)) k += `<Style id="t_${t}"><IconStyle><color>${col(T.col)}</color><Icon><href>http://maps.google.com/mapfiles/kml/shapes/placemark_circle.png</href></Icon></IconStyle></Style>`;
+  k += '<Folder><name>Точки обследования</name>';
+  for (const p of o.points) {
+    if (p.poleLat == null) continue;
+    const d = [p.typeName, p.fieldsText, p.note, p.acc != null ? 'точность ±' + fmtM(p.acc) + ' м' : (p.src === 'map' ? 'поставлено на карте' : ''), p.spanM != null ? 'пролёт ' + Math.round(p.spanM) + ' м' : '', p.photos.length ? 'фото: ' + p.photos.map(f => f.file).join(', ') : ''].filter(Boolean).join('\n');
+    k += `<Placemark><name>${esc(p.code + ' ' + p.typeName)}</name><description>${esc(d)}</description><styleUrl>#t_${p.type}</styleUrl><Point><coordinates>${c7(p.poleLon)},${c7(p.poleLat)},0</coordinates></Point></Placemark>`;
+  }
+  k += '</Folder>';
+  const line = o.points.filter(p => TYPES[p.type] && TYPES[p.type].line && p.poleLat != null);
+  if (line.length > 1) k += `<Placemark><name>Ход по опорам</name><Style><LineStyle><color>ff0051e6</color><width>3</width></LineStyle></Style><LineString><tessellate>1</tessellate><coordinates>${line.map(p => c7(p.poleLon) + ',' + c7(p.poleLat) + ',0').join(' ')}</coordinates></LineString></Placemark>`;
+  const t = o.survey.task;
+  if (t) {
+    k += `<Folder><name>${esc('Задание: ' + t.name)}</name>`;
+    for (const r of t.routes) k += `<Placemark><name>${esc(r.name)}</name><Style><LineStyle><color>ffc5630b</color><width>3</width></LineStyle></Style><LineString><tessellate>1</tessellate><coordinates>${r.pts.map(a => c7(a[1]) + ',' + c7(a[0]) + ',0').join(' ')}</coordinates></LineString></Placemark>`;
+    for (const q of t.points) k += `<Placemark><name>${esc('П' + q.n + ' ' + q.name)}</name><Point><coordinates>${c7(q.lon)},${c7(q.lat)},0</coordinates></Point></Placemark>`;
+    k += '</Folder>';
+  }
+  return k + '</Document></kml>\n';
+}
+function csvOut(o) {
+  const q = v => { const s = v == null ? '' : String(v); return /[";\n\r]/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s; };
+  const n7 = v => v == null ? '' : v.toFixed(7).replace('.', ',');
+  const rows = [['№', 'Тип', 'Широта', 'Долгота', 'Точность, м', 'Как снято', 'Пролёт от предыдущей, м', 'Отметки', 'Примечание', 'Фото, шт', 'Голос, шт', 'Время']];
+  for (const p of o.points) rows.push([p.code, p.typeName, n7(p.poleLat), n7(p.poleLon), p.acc != null ? fmtM(p.acc) : '', p.src === 'map' ? 'на карте' : p.mode, p.spanM != null ? Math.round(p.spanM) : '', p.fieldsText, p.note, p.photos.length, p.audio.length, fmtT(Date.parse(p.created))]);
+  return '﻿' + rows.map(r => r.map(q).join(';')).join('\r\n') + '\r\n';
+}
+function readme(o, full) {
+  return [`Обследование: ${o.survey.name}`, `Выгружено: ${fmtD(Date.now())} ${fmtT(Date.now())}, программа «Обследование ВОЛС» ${VER}`,
+    `Точек: ${o.points.length}, фото: ${o.points.reduce((a, p) => a + p.photos.length, 0)}${full ? '' : ' (в этом архиве без фото)'}`, '',
+    'obsledovanie.json — все данные', 'tochki.kml — точки и ход по опорам (Google Earth, карты)', 'vedomost.csv — таблица для Excel',
+    'foto/ — фото; координаты места съёмки записаны в каждом снимке (EXIF)', 'golos/ — голосовые заметки', '',
+    'Координаты — WGS-84. Направления — по компасу телефона (магнитные; склонение для Ростова ' + String(DECL).replace('.', ',') + '° к востоку учтено в координатах опор «в стороне»).', ''].join('\r\n');
+}
+async function buildZip(full, prog) {
+  const s = S.survey, pts = [...S.pts].sort((a, b) => a.n - b.n), files = [], ts = Date.now();
+  const out = {app: 'rnd-obsled', ver: VER, exported: new Date(ts).toISOString(), decl: DECL, photoMax: SET.photoMax,
+    survey: {id: s.id, name: s.name, created: new Date(s.cr).toISOString(), task: s.task || null}, points: []};
+  for (const p of pts) {
+    const q = pos(p), T = TYPES[p.type] || TYPES.zam, sp = span(p);
+    const P = {n: p.n, code: code(p), type: p.type, typeName: T.name, lat: p.lat, lon: p.lon, acc: p.acc, alt: p.alt, fixN: p.fixN,
+      fixTime: p.fixT ? new Date(p.fixT).toISOString() : null, src: p.src, mode: p.mode === 's' ? 'в стороне' : 'у опоры',
+      azMag: p.az, azAcc: p.azAcc == null ? null : p.azAcc, distM: p.d, poleLat: q ? q.lat : null, poleLon: q ? q.lon : null,
+      spanM: sp == null ? null : Math.round(sp * 10) / 10, fields: p.f, fieldsText: fieldsText(p), note: p.note,
+      created: new Date(p.cr).toISOString(), photos: [], audio: []};
+    let k = 0;
+    for (const f of p.photos) {
+      k++; const name = `foto/${P.code}_${k}.jpg`;
+      P.photos.push({file: name, slot: f.slot, time: new Date(f.time).toISOString(), w: f.w, h: f.h, size: f.size, lat: f.lat, lon: f.lon, acc: f.acc, dirMag: f.dir, fromGallery: !!f.gal});
+      if (full) { const r = await DB.get('files', f.id); if (r) files.push({name, data: r.data, date: new Date(f.time)}); }
+    }
+    k = 0;
+    for (const a of p.audio) {
+      k++; const name = `golos/${P.code}_${k}.${/webm/.test(a.type) ? 'webm' : 'm4a'}`;
+      P.audio.push({file: name, time: new Date(a.time).toISOString(), dur: Math.round(a.dur), size: a.size});
+      if (full) { const r = await DB.get('files', a.id); if (r) files.push({name, data: r.data, date: new Date(a.time)}); }
+    }
+    out.points.push(P);
+  }
+  files.unshift({name: 'obsledovanie.json', data: JSON.stringify(out, null, 1)}, {name: 'tochki.kml', data: kmlOut(out)},
+    {name: 'vedomost.csv', data: csvOut(out)}, {name: 'PROCHTI.txt', data: readme(out, full)});
+  const blob = await makeZip(files, prog);
+  const d = new Date(ts), stamp = `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}_${pad(d.getHours())}${pad(d.getMinutes())}`;
+  const safe = s.name.replace(/[\\/:*?"<>|#%&{}$!'@+=]+/g, ' ').replace(/\s+/g, ' ').trim().slice(0, 70);
+  return {blob, name: 'Обследование_' + safe + '_' + stamp + (full ? '' : '_без фото') + '.zip', full};
+}
+function download(blob, name) {
+  const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = name;
+  document.body.appendChild(a); a.click();
+  setTimeout(() => { URL.revokeObjectURL(a.href); a.remove(); }, 120000);
+}
+
+// ---------------------------------------------------------------- карта (Leaflet, своя копия в lib/)
+const MAP = {
+  ready: null, m: null, ov: null, base: null, me: null, meC: null, fitted: null,
+  BASES: {
+    '2gis': ['https://tile{s}.maps.2gis.com/tiles?x={x}&y={y}&z={z}&v=1', {subdomains: '0123', maxZoom: 20, maxNativeZoom: 18, attribution: '© 2ГИС'}],
+    osm: ['https://tile.openstreetmap.org/{z}/{x}/{y}.png', {maxZoom: 20, maxNativeZoom: 19, attribution: '© OpenStreetMap'}],
+    sat: ['https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', {maxZoom: 20, maxNativeZoom: 19, attribution: '© Esri'}],
+  },
+  load() {
+    if (window.L) return Promise.resolve(window.L);
+    if (this.ready) return this.ready;
+    this.ready = new Promise((res, rej) => {
+      const c = document.createElement('link'); c.rel = 'stylesheet'; c.href = 'leaflet.css'; document.head.appendChild(c);
+      const s = document.createElement('script'); s.src = 'leaflet.js';
+      s.onload = () => res(window.L);
+      s.onerror = () => { this.ready = null; s.remove(); rej(new Error('Карта не загрузилась — нет интернета. Точки и фото работают и без карты.')); };
+      document.head.appendChild(s);
+    });
+    return this.ready;
+  },
+  async show() {
+    const w = $('#mapwrap'), top = $('.top');
+    w.style.top = (top ? top.getBoundingClientRect().bottom : 56) + 'px'; w.style.display = 'block';
+    let L;
+    try { L = await this.load(); } catch (e) { $('#map').innerHTML = `<div class="card" style="margin:60px 12px">${esc(e.message)}</div>`; return; }
+    if (!(S.view === 'survey' && S.tab === 'map')) return;
+    if (!this.m) {
+      $('#map').innerHTML = '';
+      this.m = L.map('map', {zoomControl: false, zoomSnap: 0.5});
+      this.m.attributionControl.setPrefix(false);
+      this.m.setView([47.2313, 39.7233], 13);          // вид нужен до первых линий
+      L.control.zoom({position: 'bottomleft'}).addTo(this.m);
+      this.ov = L.layerGroup().addTo(this.m);
+      this.setBase(SET.base);
+    }
+    this.m.invalidateSize();
+    if (S.focus) {
+      const p = S.pts.find(q => q.id === S.focus), q = pos(p), g = GPS.fresh(60000);
+      S.focus = null;
+      if (q) this.m.setView([q.lat, q.lon], 19); else if (g) this.m.setView([g.lat, g.lon], 19); else this.fit();
+      this.fitted = S.sid;
+    } else if (this.fitted !== S.sid) { this.fit(); this.fitted = S.sid; }
+    this.draw();
+    this.placeUI();
+  },
+  hide() { const w = $('#mapwrap'); if (w) w.style.display = 'none'; },
+  setBase(k) {
+    const L = window.L; if (!L || !this.m) return;
+    if (!this.BASES[k]) k = '2gis';
+    if (this.base) this.base.remove();
+    this.base = L.tileLayer(this.BASES[k][0], this.BASES[k][1]).addTo(this.m);
+    SET.base = k; saveSet();
+    $$('#mapwrap [data-a="map-base"]').forEach(x => x.classList.toggle('on', x.dataset.b === k));
+  },
+  fit() {
+    const L = window.L; if (!L || !this.m) return;
+    const pts = [], t = S.survey && S.survey.task;
+    if (t) { for (const r of t.routes) for (const a of r.pts) pts.push(a); for (const q of t.points) pts.push([q.lat, q.lon]); }
+    for (const p of S.pts) { const q = pos(p); if (q) pts.push([q.lat, q.lon]); }
+    const g = GPS.fresh(60000);
+    if (pts.length > 1) this.m.fitBounds(L.latLngBounds(pts).pad(0.08));
+    else if (pts.length === 1) this.m.setView(pts[0], 18);
+    else if (g) this.m.setView([g.lat, g.lon], 17);
+    else this.m.setView([47.2313, 39.7233], 13);
+  },
+  draw() {
+    const L = window.L; if (!L || !this.m) return;
+    this.ov.clearLayers();
+    const t = S.survey && S.survey.task;
+    if (t) {
+      for (const r of t.routes) L.polyline(r.pts, {color: '#0b63c5', weight: 4, opacity: .75, dashArray: '10 8', interactive: false}).addTo(this.ov);
+      for (const q of t.points) L.marker([q.lat, q.lon], {icon: L.divIcon({className: 'mk-task', html: `<span>П${esc(q.n)}</span>`, iconSize: null}), zIndexOffset: -100})
+        .bindPopup(`<b>П${esc(q.n)}</b> ${esc(q.name)}`).addTo(this.ov);
+    }
+    let prev = null;
+    for (const p of S.pts) {
+      if (!TYPES[p.type] || !TYPES[p.type].line) continue;
+      const q = pos(p); if (!q) continue;
+      if (prev) {
+        L.polyline([[prev.lat, prev.lon], [q.lat, q.lon]], {color: '#e65100', weight: 3, interactive: false}).addTo(this.ov);
+        L.marker([(prev.lat + q.lat) / 2, (prev.lon + q.lon) / 2], {icon: L.divIcon({className: 'mk-span', html: `<span>${Math.round(dist(prev, q))} м</span>`, iconSize: null}), interactive: false}).addTo(this.ov);
+      }
+      prev = q;
+    }
+    for (const p of S.pts) {
+      const q = pos(p); if (!q) continue;
+      const T = TYPES[p.type] || TYPES.zam;
+      L.marker([q.lat, q.lon], {icon: L.divIcon({className: 'mk-pt', html: `<span style="background:${T.col}">${p.n}</span>`, iconSize: null}), zIndexOffset: 100})
+        .on('click', () => go('point', {pid: p.id})).addTo(this.ov);
+    }
+    this.drawMe();
+  },
+  drawMe() {
+    const L = window.L; if (!L || !this.m) return;
+    const g = GPS.fresh(30000);
+    if (!g) { if (this.me) { this.me.remove(); this.meC.remove(); this.me = this.meC = null; } return; }
+    const ll = [g.lat, g.lon];
+    if (!this.me) {
+      this.meC = L.circle(ll, {radius: g.acc, color: '#1e88e5', weight: 1, fillOpacity: .1, interactive: false}).addTo(this.m);
+      this.me = L.circleMarker(ll, {radius: 7, color: '#fff', weight: 2, fillColor: '#1e88e5', fillOpacity: 1, interactive: false}).addTo(this.m);
+    } else { this.me.setLatLng(ll); this.meC.setLatLng(ll); this.meC.setRadius(g.acc); }
+  },
+  placeUI() {
+    const p = S.place && S.pts.find(q => q.id === S.place);
+    $('#cross').hidden = !p; const b = $('#placebar'); b.hidden = !p;
+    if (p) b.innerHTML = `<div style="margin-bottom:8px">Двигайте карту и поставьте крестик точно на опору Т${p.n}</div><div class="row"><button class="btn pri" data-a="place-ok">Поставить сюда</button><button class="btn" data-a="place-no">Не надо</button></div>`;
+  },
+};
+
+// ---------------------------------------------------------------- экраны
+const app = () => $('#app');
+function hdr(title, back, right = '', gps = true) {
+  return `<header class="top">${back ? '<button class="ib" data-a="back" aria-label="Назад">‹</button>' : ''}<h1>${esc(title)}</h1>${right}${gps ? '<span id="gps" class="gps" data-a="gps-help">GPS</span>' : ''}</header>`;
+}
+const isStandalone = () => window.navigator.standalone === true || (window.matchMedia && matchMedia('(display-mode: standalone)').matches);
+
+async function vHome() {
+  const sv = (await DB.all('surveys')).sort((a, b) => b.upd - a.upd);
+  const cnt = {};
+  for (const p of await DB.all('points')) { const c = cnt[p.survey] || (cnt[p.survey] = {n: 0, f: 0}); c.n++; c.f += (p.photos || []).length; }
+  let h = hdr('Обследование ВОЛС', false, '<button class="ib" data-a="help" aria-label="Как работать">?</button>', false) + '<main>';
+  h += '<button class="btn pri big" data-a="new-survey">+ Новое обследование</button><div style="height:8px"></div>';
+  h += '<div class="row"><button class="btn" data-a="task-paste">Задание по ссылке</button><label class="btn" for="inTask" data-a="nop">Задание из файла</label></div>';
+  if (sv.length) h += '<h2>Обследования</h2>' + sv.map(s => {
+    const c = cnt[s.id] || {n: 0, f: 0};
+    return `<div class="it" data-a="open-survey" data-id="${s.id}"><div class="badge" style="background:#0f2740">${c.n}</div><div class="tx"><div class="t1">${esc(s.name)}</div><div class="t2">${fmtD(s.cr)} · точек ${c.n} · фото ${c.f}${s.task ? ' · есть задание' : ''}</div></div><div class="mut">›</div></div>`;
+  }).join('');
+  else h += '<div class="card small" style="margin-top:14px">Нажмите «Новое обследование» или откройте ссылку-задание от проектного отдела — на карте будут трасса и пункты, что проверить.</div>';
+  if (!isStandalone()) h += '<div class="card small mut" style="margin-top:14px">Можно добавить значок на экран: «Поделиться» → «На экран „Домой“». Но значок хранит данные отдельно от Safari — начатое здесь в значке видно не будет.</div>';
+  return h + `<div class="small mut" style="text-align:center;margin-top:18px">РНД-Строй · версия ${esc(VER)}</div></main>`;
+}
+function nearHint() {
+  const g = GPS.fresh(30000), nt = g && nearTask(g, 300);
+  if (!nt) return '';
+  return `<div class="card small" data-a="tab" data-tab="task" style="cursor:pointer">Рядом пункт задания <b>П${esc(nt.x.n)}</b> · ${fmtDist(nt.d)} — ${esc(nt.x.name)}</div>`;
+}
+function shortInfo(p) {
+  const f = p.f || {};
+  const a = [f.tab, f.vlad, f.tip, f.marka, f.ul, f.nom, f.poch].filter(x => x && String(x).trim()).map(String);
+  if (!a.length && p.note) a.push(p.note.slice(0, 40));
+  return a.slice(0, 3).join(', ');
+}
+function ptRow(p) {
+  const T = TYPES[p.type] || TYPES.zam, sp = span(p), ph = p.photos.length;
+  const filled = T.slots.filter(sl => p.photos.some(f => f.slot === sl)).length;
+  const bits = [p.lat == null ? '<b style="color:var(--bad)">нет координат</b>' : p.src === 'map' ? 'на карте' : '±' + fmtM(p.acc) + ' м' + (p.mode === 's' ? ', в стороне' : '')];
+  if (sp != null) bits.push('пролёт ' + Math.round(sp) + ' м');
+  bits.push('фото ' + ph + (filled >= T.slots.length ? ' ✓' : ` (${filled}/${T.slots.length})`));
+  if (p.audio.length) bits.push('голос ' + p.audio.length);
+  const info = shortInfo(p);
+  return `<div class="it" data-a="open-pt" data-id="${p.id}"><div class="badge" style="background:${T.col}">${p.n}</div><div class="tx"><div class="t1">${esc(T.name)}${info ? ' · ' + esc(info) : ''}</div><div class="t2">${bits.join(' · ')}</div></div><div class="mut">›</div></div>`;
+}
+function tPts() {
+  let h = nearHint();
+  if (!S.pts.length) h += `<div class="card"><b>Как работать</b><ol class="small">
+<li>Подойдите к опоре вплотную и нажмите «+ Опора» — координаты запишутся сами. Постойте 10 секунд.</li>
+<li>Снимайте по плиткам: опора целиком, табличка, верх, вперёд по трассе.</li>
+<li>Отметьте кнопками: чья, тип, кабели, место. Остальное — в примечание, можно голосом.</li>
+<li>Дальше — «+ Следующая опора». В конце — вкладка «Выгрузка».</li></ol></div>`;
+  return h + S.pts.map(ptRow).join('');
+}
+function tTask() {
+  const t = S.survey.task;
+  if (!t) return '<div class="card">Задания нет. Его можно открыть по ссылке от проектного отдела или из файла KML/JSON.</div><div class="grid"><button class="btn big" data-a="task-paste">Вставить ссылку-задание</button><label class="btn big" for="inTask" data-a="nop">Задание из файла</label></div>';
+  const g = GPS.fresh(60000);
+  let h = `<div class="card"><b>${esc(t.name)}</b>${t.note ? `<div class="small" style="margin-top:6px;white-space:pre-line">${esc(t.note)}</div>` : ''}</div>`;
+  h += t.points.map(q => `<div class="card"><div class="row" style="align-items:flex-start"><div class="badge" style="background:#fff;color:#0b63c5;border:2px solid #0b63c5;min-width:46px;height:40px">П${esc(q.n)}</div><div style="flex:1;min-width:0"><b>${esc(q.name)}</b>${g ? ` <span class="mut small">· ${fmtDist(dist(g, q))}</span>` : ''}${q.text ? `<div class="small" style="margin-top:4px;white-space:pre-line">${esc(q.text)}</div>` : ''}</div></div></div>`).join('');
+  return h + '<div class="row"><button class="btn" data-a="tab" data-tab="map">На карте</button><button class="btn" data-a="task-paste">Заменить</button></div>';
+}
+function tExp() {
+  const n = S.pts.length, ph = S.pts.reduce((a, p) => a + p.photos.length, 0), au = S.pts.reduce((a, p) => a + p.audio.length, 0);
+  const size = S.pts.reduce((a, p) => a + p.photos.reduce((b, f) => b + (f.size || 0), 0) + p.audio.reduce((b, f) => b + (f.size || 0), 0), 0);
+  const noC = S.pts.filter(p => p.lat == null);
+  let h = `<div class="card">Точек <b>${n}</b> · фото <b>${ph}</b>${au ? ` · голосовых <b>${au}</b>` : ''} · ≈${fmtMB(size)}`;
+  if (noC.length) h += `<div style="color:var(--bad);margin-top:6px">Без координат: ${noC.map(p => 'Т' + p.n).join(', ')} — откройте точку и нажмите «Уточнить GPS» или «На карте».</div>`;
+  h += '</div>';
+  if (S.zip) {
+    h += `<div class="card"><div>Архив собран${S.zip.full ? '' : ' (без фото)'}: <b>${fmtMB(S.zip.blob.size)}</b></div><div class="small mut" style="margin:4px 0 10px;word-break:break-all">${esc(S.zip.name)}</div>
+<div class="grid"><button class="btn pri big" data-a="share">Отправить…</button><button class="btn big" data-a="save">Сохранить в «Файлы»</button></div>
+<div class="small mut" style="margin-top:8px">«Отправить» → почта <b>rnd-stroy@internet.ru</b> или Telegram. Архив больше 20 МБ — лучше Telegram.</div></div>
+<button class="btn" data-a="zip-reset" style="width:100%">Собрать заново</button>`;
+  } else {
+    h += `<button class="btn pri big" data-a="zip" data-full="1">Собрать архив с фото</button><div style="height:8px"></div><button class="btn big" data-a="zip" data-full="0">Только точки и таблица, без фото</button>`;
+  }
+  h += `<h2>Настройки</h2><div class="card"><div class="fl" style="margin-top:0">Размер фото</div><div class="chips"><button class="chip${SET.photoMax === 2560 ? ' on' : ''}" data-a="set-photo" data-v="2560">Обычный, 2560 px</button><button class="chip${SET.photoMax === 4032 ? ' on' : ''}" data-a="set-photo" data-v="4032">Крупный, 4032 px</button></div><div class="small mut" style="margin-top:8px" id="stor">&nbsp;</div></div>`;
+  return h + `<button class="btn red" data-a="sv-del" style="width:100%">Удалить это обследование</button>`;
+}
+function tabsBar() {
+  const T = [['pts', ICO.list, 'Точки'], ['map', ICO.map, 'Карта'], ['task', ICO.task, 'Задание'], ['exp', ICO.exp, 'Выгрузка']];
+  return `<nav class="tabs">${T.map(([k, i, l]) => `<button class="${S.tab === k ? 'on' : ''}" data-a="tab" data-tab="${k}">${i}${l}</button>`).join('')}</nav>`;
+}
+function vSurvey() {
+  const t = S.tab;
+  const body = t === 'pts' ? tPts() : t === 'task' ? tTask() : t === 'exp' ? tExp() : '';
+  const fab = t === 'pts' ? '<div class="fab"><button class="btn pri big" data-a="add" data-t="opora">+ Опора</button><button class="btn big" style="flex:0 0 36%" data-a="add-menu">+ Другое</button></div>' : '';
+  return hdr(S.survey.name, true, '<button class="ib" data-a="sv-menu" aria-label="Меню">⋯</button>') + `<main>${body}</main>` + fab + tabsBar();
+}
+function coordHtml(p) {
+  const R = Refine.pid === p.id;
+  let h = '';
+  if (p.lat == null) h += `<div style="color:var(--bad);font-weight:700">${R ? 'Ловлю GPS… стойте у опоры' : 'Нет координат'}</div>`;
+  else {
+    h += `<div class="coord"><b>${p.lat.toFixed(6)}, ${p.lon.toFixed(6)}</b></div>`;
+    h += `<div class="small mut">${p.src === 'map' ? 'поставлено на карте' : '±' + fmtM(p.acc) + ' м · замеров ' + (p.fixN || 1)} · ${fmtT(p.fixT || p.cr)}${R ? ' · <b style="color:var(--acc)">уточняю, стойте…</b>' : ''}</div>`;
+    if (p.src !== 'map' && p.acc > 15 && !R) h += '<div class="small" style="color:var(--mid);margin-top:4px">Точность слабая: постойте у опоры и нажмите «Уточнить GPS» или поставьте точку на карте.</div>';
+  }
+  const sp = span(p);
+  if (sp != null) h += `<div class="small" style="margin-top:4px">Пролёт от предыдущей: <b>${Math.round(sp)} м</b>${sp > 50 ? ' <b style="color:var(--mid)">— больше 50 м</b>' : ''}</div>`;
+  h += `<div class="chips" style="margin-top:10px"><button class="chip${p.mode !== 's' ? ' on' : ''}" data-a="pt-mode" data-m="u">Я у опоры</button><button class="chip${p.mode === 's' ? ' on' : ''}" data-a="pt-mode" data-m="s">Опора в стороне</button></div>`;
+  if (p.mode === 's') {
+    h += `<div class="small" style="margin-top:8px">Направление на опору: <b>${p.az == null ? 'не засечено' : Math.round(p.az) + '°'}</b> · до опоры: <b>${p.d ? p.d + ' м' : 'не задано'}</b></div>`;
+    h += '<button class="btn" style="width:100%;margin-top:8px" data-a="bearing">🧭 Засечь направление</button>';
+    h += `<div class="chips" style="margin-top:8px">${[3, 5, 10, 15, 20, 30].map(d => `<button class="chip${p.d === d ? ' on' : ''}" data-a="pt-d" data-d="${d}">${d} м</button>`).join('')}</div>`;
+    const q = pos(p);
+    if (q && p.az != null && p.d) h += `<div class="small mut" style="margin-top:6px">Опора по расчёту: ${q.lat.toFixed(6)}, ${q.lon.toFixed(6)}</div>`;
+  }
+  h += '<div class="row" style="margin-top:10px"><button class="btn" data-a="refix">Уточнить GPS</button><button class="btn" data-a="pt-map">На карте</button></div>';
+  return h;
+}
+function updCoord(p) { if (p && S.view === 'point' && S.pid === p.id) { const el = $('#coord'); if (el) el.innerHTML = coordHtml(p); } }
+function slotHtml(p, sl) {
+  const fs = p.photos.filter(f => f.slot === sl);
+  if (fs.length) return `<div class="slot has" data-a="ph-view" data-slot="${esc(sl)}"><img data-th="${fs[fs.length - 1].id}" alt=""><span class="n">${fs.length}</span><span class="cap">${esc(sl)}</span></div>`;
+  return `<label class="slot" for="inCam" data-a="cam" data-slot="${esc(sl)}">${ICO.cam}<span>${esc(sl)}</span></label>`;
+}
+function formHtml(p) {
+  const f = p.f || {};
+  return (FORMS[p.type] || []).map(d => {
+    if (d.iff && !d.iff(f)) return '';
+    let h = `<div class="fl">${esc(d.l)}</div>`;
+    if (d.t === 'text') h += `<input class="tx" data-f="${d.k}" value="${esc(f[d.k] || '')}" autocomplete="off" enterkeyhint="done">`;
+    else if (d.t === 'num') h += `<input class="tx" data-f="${d.k}" inputmode="decimal" value="${esc(f[d.k] || '')}" autocomplete="off" enterkeyhint="done">`;
+    else h += `<div class="chips">${d.o.map(o => {
+      const on = d.t === 'many' ? (f[d.k] || []).includes(o) : f[d.k] === o;
+      return `<button class="chip${on ? ' on' : ''}" data-a="chip" data-k="${d.k}" data-v="${esc(o)}" data-m="${d.t === 'many' ? 1 : 0}">${esc(o)}</button>`;
+    }).join('')}</div>`;
+    return h;
+  }).join('');
+}
+function vPoint() {
+  const p = curPt(), T = TYPES[p.type] || TYPES.zam, i = S.pts.indexOf(p), prev = S.pts[i - 1], next = S.pts[i + 1];
+  let h = hdr(`Т${p.n} · ${T.name}`, true, '<button class="ib" data-a="pt-del" aria-label="Удалить точку">🗑</button>') + '<main>';
+  h += `<div class="card" id="coord">${coordHtml(p)}</div>`;
+  const nt = nearTask(pos(p) || GPS.fresh());
+  if (nt) h += `<div class="card small"><details${nt.x.text ? '' : ' open'}><summary>Пункт задания <b>П${esc(nt.x.n)}</b> · ${fmtDist(nt.d)} — ${esc(nt.x.name)}</summary>${nt.x.text ? `<div style="margin-top:6px;white-space:pre-line">${esc(nt.x.text)}</div>` : ''}</details></div>`;
+  h += `<div class="chips" style="margin:4px 0 12px">${Object.entries(TYPES).map(([k, t]) => `<button class="chip${k === p.type ? ' on' : ''}" data-a="pt-type" data-t="${k}">${esc(t.name)}</button>`).join('')}</div>`;
+  const extra = [...new Set(p.photos.map(f => f.slot))].filter(sl => !T.slots.includes(sl) && sl !== MORE);   // фото из прежнего типа точки
+  h += `<div class="slots">${T.slots.concat(extra, MORE).map(sl => slotHtml(p, sl)).join('')}</div>`;
+  h += '<div style="margin:10px 2px"><label class="small mut" for="inGal" data-a="gal" style="text-decoration:underline;cursor:pointer">Добавить фото из галереи</label></div>';
+  if (p.type === 'opora' && S.pts.slice(0, i).some(q => q.type === 'opora')) h += '<button class="btn" style="width:100%" data-a="copy-prev">Отметки как у предыдущей опоры</button>';
+  h += formHtml(p);
+  h += `<div class="fl">Примечание — можно голосом (микрофон на клавиатуре)</div><textarea data-f="note" placeholder="Куда идти дальше, препятствия, что сказал хозяин…">${esc(p.note || '')}</textarea>`;
+  h += '<div class="fl">Голосовые заметки</div>';
+  h += p.audio.map(a => `<div class="row" style="margin-bottom:6px"><button class="btn" data-a="au-play" data-id="${a.id}">▶ ${fmtT(a.time)} · ${Math.round(a.dur || 0)} с</button><button class="btn red" style="flex:0 0 56px" data-a="au-del" data-id="${a.id}">✕</button></div>`).join('');
+  h += `<button class="btn big" data-a="rec">${REC.on ? '■ Остановить запись' : '🎙 Записать голосом'}</button>`;
+  h += `<div class="row small" style="margin-top:14px"><button class="btn" data-a="pt-move" data-dir="-1" ${prev ? '' : 'disabled'}>▲ Раньше по трассе</button><button class="btn" data-a="pt-move" data-dir="1" ${next ? '' : 'disabled'}>▼ Позже</button></div>`;
+  h += '<div style="height:80px"></div></main>';
+  h += `<div class="fab low"><button class="btn" style="flex:0 0 52px;font-size:24px" data-a="pt-go" data-id="${prev ? prev.id : ''}" ${prev ? '' : 'disabled'} aria-label="Предыдущая">‹</button><button class="btn pri big" data-a="add" data-t="opora">+ Следующая опора</button><button class="btn" style="flex:0 0 52px;font-size:24px" data-a="pt-go" data-id="${next ? next.id : ''}" ${next ? '' : 'disabled'} aria-label="Следующая">›</button></div>`;
+  return h;
+}
+let RT = 0;
+async function render() {
+  const tok = ++RT;
+  let h;
+  if (S.view === 'home') h = await vHome();
+  else if (!S.survey) { S.view = 'home'; h = await vHome(); }
+  else if (S.view === 'point' && curPt()) h = vPoint();
+  else { S.view = 'survey'; h = vSurvey(); }
+  if (tok !== RT) return;
+  app().innerHTML = h;
+  if (S.view === 'home') { Refine.stop(true); GPS.stop(); } else GPS.start();
+  updGps(); fillMedia();
+  if (S.view === 'survey' && S.tab === 'map') MAP.show(); else MAP.hide();
+  if (S.view === 'survey' && S.tab === 'exp' && navigator.storage && navigator.storage.estimate) navigator.storage.estimate().then(e => { const el = $('#stor'); if (el && e.usage != null) el.textContent = `Занято в телефоне: ${fmtMB(e.usage)}${e.quota ? ' из ' + fmtMB(e.quota) : ''}`; }).catch(() => {});
+}
+function rr() { const y = window.scrollY; render().then(() => window.scrollTo(0, y)); }
+function go(view, o = {}, push = true) {
+  flushSave();
+  if (REC.on) REC.stop().then(() => { if (S.view === 'point') rr(); });
+  Object.assign(S, {view}, o);
+  const d = depth();
+  if (push) history.pushState(st(d + 1), ''); else history.replaceState(st(d), '');
+  render().then(() => window.scrollTo(0, 0));
+}
+
+// ---------------------------------------------------------------- окна снизу и подсказки
+let SHEET_CLOSE = null;
+function sheet(html, onClose) {
+  closeSheet();
+  const d = document.createElement('div'); d.className = 'sheet-bg'; d.id = 'sheet';
+  d.innerHTML = `<div class="sheet">${html}</div>`;
+  d.addEventListener('click', e => { if (e.target === d) closeSheet(); });
+  document.body.appendChild(d); SHEET_CLOSE = onClose || null;
+}
+function closeSheet() {
+  const d = $('#sheet'); if (d) d.remove();
+  if (SHEET_CLOSE) { const f = SHEET_CLOSE; SHEET_CLOSE = null; f(); }
+}
+let toastT = null;
+function toast(msg, ms = 2600) {
+  let t = $('#toast');
+  if (!t) { t = document.createElement('div'); t.id = 'toast'; t.className = 'toast'; document.body.appendChild(t); }
+  t.textContent = msg; t.style.display = 'block';
+  clearTimeout(toastT); toastT = setTimeout(() => { t.style.display = 'none'; }, ms);
+}
+const HELP = `<h3>Как работать</h3><ol>
+<li>Подойдите к опоре вплотную и нажмите «+ Опора». Координаты запишутся сами и уточнятся за 10 секунд — не уходите сразу.</li>
+<li>Фото — по плиткам. Табличку снимайте крупно, чтобы читался номер.</li>
+<li>Отметки — кнопками. Всё остальное — в примечание (микрофон на клавиатуре) или голосовой заметкой.</li>
+<li>Опора за забором или через дорогу — «Опора в стороне»: засеките направление компасом и выберите расстояние.</li>
+<li>GPS слабый (±20 м и больше) — «На карте» и поставьте точку вручную.</li>
+<li>В конце: «Выгрузка» → «Собрать архив» → «Отправить» → почта rnd-stroy@internet.ru или Telegram.</li></ol>
+<p class="small"><b>GPS не работает или ±1000 м</b> — Настройки → Конфиденциальность и безопасность → Службы геолокации → Сайты Safari: «При использовании», «Точная геопозиция» — включить.</p>
+<p class="small"><b>Данные</b> хранятся в телефоне, в этой программе, пока не удалите. Интернет нужен только для карты. Не открывайте программу в «Частном доступе».</p>
+<button class="btn big" data-a="sheet-close">Понятно</button>`;
+
+// ---------------------------------------------------------------- действия
+const ACT = {
+  nop() {},
+  'sheet-close'() { closeSheet(); },
+  help() { sheet(HELP); },
+  back() {
+    flushSave(); closeSheet();
+    if (depth() > 0) { history.back(); return; }
+    if (S.view === 'point') go('survey', {pid: null}, false); else go('home', {sid: null, survey: null, pts: [], pid: null}, false);
+  },
+  'gps-help'() {
+    const g = GPS.last;
+    sheet(`<h3>GPS</h3><div class="card">${g ? `${g.lat.toFixed(6)}, ${g.lon.toFixed(6)}<br><span class="small mut">±${fmtM(g.acc)} м · ${Math.round((Date.now() - g.t) / 1000)} с назад${g.alt != null ? ` · высота ${Math.round(g.alt)} м` : ''}</span>` : 'Координат пока нет.'}${GPS.err ? `<div class="small" style="color:var(--bad);margin-top:6px">${GPS.err.code === 1 ? 'Доступ к геопозиции запрещён.' : esc(GPS.err.message || 'ошибка GPS')}</div>` : ''}</div>
+<p class="small">Зелёный — до ±8 м, жёлтый — до ±20 м, красный — хуже. Под деревьями и у высоких домов точность падает — отойдите на открытое место или ставьте точку на карте.</p>
+<p class="small">Если «запрещён» или точность около километра: Настройки → Конфиденциальность и безопасность → Службы геолокации → Сайты Safari → «При использовании» и «Точная геопозиция». Потом обновите страницу.</p>
+<button class="btn big" data-a="sheet-close">Закрыть</button>`);
+  },
+  async 'new-survey'() {
+    const name = prompt('Название: объект и участок', '');
+    if (!name || !name.trim()) return;
+    await newSurvey(name.trim(), null);
+  },
+  'open-survey'(el) { return openSurvey(el.dataset.id); },
+  async 'task-paste'() {
+    closeSheet();
+    const s = prompt('Вставьте ссылку-задание (нажмите и удерживайте → «Вставить»):', '');
+    if (!s) return;
+    let t; try { t = await decodeTask(s); } catch (e) { toast('Не получилось прочитать задание: ' + e.message, 7000); return; }
+    await useTask(t);
+  },
+  'sv-menu'() {
+    sheet(`<h3>${esc(S.survey.name)}</h3><div class="grid"><button class="btn" data-a="sv-rename">Переименовать</button><button class="btn" data-a="task-paste">Вставить ссылку-задание</button><label class="btn" for="inTask" data-a="nop">Задание из файла (KML, JSON)</label><button class="btn" data-a="help">Как работать</button><button class="btn" data-a="sheet-close">Закрыть</button></div>`);
+  },
+  async 'sv-rename'() {
+    closeSheet();
+    const n = prompt('Новое название', S.survey.name);
+    if (n && n.trim()) { S.survey.name = n.trim(); await saveSurvey(); rr(); }
+  },
+  async 'sv-del'() {
+    if (!confirm(`Удалить обследование «${S.survey.name}» со всеми фото? Вернуть будет нельзя.`)) return;
+    if (S.pts.some(p => p.photos.length) && !confirm('Точно удалить? Архив выгружен и отправлен?')) return;
+    for (const k of await DB.keys('files', 'survey', S.sid)) { await DB.del('files', k); await DB.del('thumbs', k); dropURL(k); }
+    for (const p of S.pts) await DB.del('points', p.id);
+    await DB.del('surveys', S.sid);
+    go('home', {sid: null, survey: null, pts: [], pid: null}, false);
+  },
+  tab(el) { S.tab = el.dataset.tab; history.replaceState(st(depth()), ''); render().then(() => window.scrollTo(0, 0)); },
+  'add-menu'() { sheet(`<h3>Новая точка здесь</h3><div class="grid">${Object.entries(TYPES).map(([k, t]) => `<button class="btn big" data-a="add" data-t="${k}" style="justify-content:flex-start"><span class="badge" style="background:${t.col};min-width:28px;height:28px"></span>${esc(t.name)}</button>`).join('')}</div>`); },
+  add(el) {
+    COMPASS.request();                 // разрешение на компас — пока палец на кнопке
+    closeSheet();
+    const type = el.dataset.t || 'opora', g = GPS.fresh(10000);
+    const n = S.pts.length ? Math.max(...S.pts.map(p => p.n)) + 1 : 1;
+    const p = {id: uid(), survey: S.sid, n, type, cr: Date.now(), upd: Date.now(), lat: g ? g.lat : null, lon: g ? g.lon : null, acc: g ? g.acc : null, alt: g ? g.alt : null,
+      fixN: g ? 1 : 0, fixT: g ? g.t : null, src: 'gps', mode: 'u', az: null, azAcc: null, d: null, f: {}, note: '', photos: [], audio: []};
+    S.pts.push(p);
+    savePoint(p).catch(() => {});
+    Refine.start(p.id);
+    if (S.view === 'point') { flushSave(); S.pid = p.id; history.replaceState(st(depth()), ''); render().then(() => window.scrollTo(0, 0)); }
+    else go('point', {pid: p.id});
+    toast(g ? `Т${n}: координаты записаны, уточняю — постойте 10 с` : `Т${n}: жду GPS — стойте у опоры`, 3500);
+  },
+  'open-pt'(el) { go('point', {pid: el.dataset.id}); },
+  'pt-go'(el) {
+    if (!el.dataset.id) return;
+    flushSave(); if (REC.on) REC.stop();
+    S.pid = el.dataset.id; history.replaceState(st(depth()), ''); render().then(() => window.scrollTo(0, 0));
+  },
+  'pt-move'(el) {
+    const p = curPt(), i = S.pts.indexOf(p), j = i + Number(el.dataset.dir);
+    if (j < 0 || j >= S.pts.length) return;
+    const q = S.pts[j]; [p.n, q.n] = [q.n, p.n];
+    S.pts.sort((a, b) => a.n - b.n);
+    savePoint(p).catch(() => {}); savePoint(q).catch(() => {}); rr();
+  },
+  async 'pt-del'() {
+    const p = curPt(); if (!p) return;
+    if (!confirm(`Удалить точку Т${p.n}${p.photos.length ? ` вместе с фото (${p.photos.length})` : ''}?`)) return;
+    if (Refine.pid === p.id) Refine.stop(true);
+    for (const f of p.photos) { await DB.del('files', f.id); await DB.del('thumbs', f.id); dropURL(f.id); }
+    for (const a of p.audio) { await DB.del('files', a.id); dropURL(a.id); }
+    await DB.del('points', p.id);
+    S.pts = S.pts.filter(q => q !== p);
+    for (let k = 0; k < S.pts.length; k++) if (S.pts[k].n !== k + 1) { S.pts[k].n = k + 1; await savePoint(S.pts[k]); }
+    S.zip = null; S.pid = null;
+    ACT.back();
+  },
+  'pt-type'(el) { const p = curPt(); p.type = el.dataset.t; savePoint(p).catch(() => {}); rr(); },
+  'pt-mode'(el) { const p = curPt(); p.mode = el.dataset.m; savePoint(p).catch(() => {}); updCoord(p); },
+  'pt-d'(el) { const p = curPt(); p.d = Number(el.dataset.d); savePoint(p).catch(() => {}); updCoord(p); },
+  refix() { const p = curPt(); Refine.start(p.id); toast('Стойте у опоры 10 секунд', 3000); },
+  'pt-map'() { const p = curPt(); S.focus = p.id; S.place = p.id; S.tab = 'map'; go('survey', {pid: null}); },
+  'place-ok'() {
+    const p = S.pts.find(q => q.id === S.place); if (!p || !MAP.m) return;
+    const c = MAP.m.getCenter();
+    if (Refine.pid === p.id) Refine.stop(true);
+    Object.assign(p, {lat: c.lat, lon: c.lng, acc: null, alt: null, src: 'map', fixN: 0, fixT: Date.now(), mode: 'u'});
+    savePoint(p).catch(() => {});
+    S.place = null; MAP.draw(); MAP.placeUI(); toast(`Т${p.n} поставлена на карте`);
+  },
+  'place-no'() { S.place = null; MAP.placeUI(); },
+  'map-base'(el) { MAP.setBase(el.dataset.b); },
+  'map-me'() { const g = GPS.fresh(60000); if (g && MAP.m) MAP.m.setView([g.lat, g.lon], Math.max(MAP.m.getZoom(), 17)); else toast('GPS ещё не поймал'); },
+  'map-fit'() { MAP.fit(); },
+  bearing() {
+    const pr = COMPASS.request();      // первым делом — пока длится нажатие
+    const upd = h => { const e = $('#cmp'); if (e) e.textContent = Math.round(h) + '°'; const a = $('#cmpacc'); if (a && COMPASS.acc != null && COMPASS.acc >= 0) a.textContent = 'погрешность компаса ±' + Math.round(COMPASS.acc) + '°'; };
+    sheet(`<h3>Направление на опору</h3><div class="small">Держите телефон горизонтально, верхним краем точно на опору, и нажмите «Засечь».</div><div id="cmp" style="font-size:60px;text-align:center;font-weight:700;margin:18px 0 4px">—</div><div id="cmpacc" class="small mut" style="text-align:center;min-height:20px"></div><div class="row" style="margin-top:12px"><button class="btn pri big" data-a="bearing-set">Засечь</button><button class="btn big" data-a="sheet-close">Отмена</button></div>`, () => COMPASS.subs.delete(upd));
+    COMPASS.subs.add(upd);
+    pr.then(ok => { if (!ok) { const e = $('#cmp'); if (e) { e.textContent = 'нет доступа к компасу'; e.style.fontSize = '20px'; } } });
+  },
+  'bearing-set'() {
+    const p = curPt(), h = COMPASS.fresh();
+    if (h == null) { toast('Компас молчит — поводите телефоном восьмёркой и попробуйте ещё раз', 5000); return; }
+    p.az = Math.round(h * 10) / 10; p.azAcc = COMPASS.acc != null && COMPASS.acc >= 0 ? Math.round(COMPASS.acc) : null;
+    savePoint(p).catch(() => {}); closeSheet(); updCoord(p);
+  },
+  chip(el) {
+    const p = curPt(), k = el.dataset.k, v = el.dataset.v;
+    if (el.dataset.m === '1') { const a = Array.isArray(p.f[k]) ? p.f[k] : []; p.f[k] = a.includes(v) ? a.filter(x => x !== v) : a.concat(v); }
+    else p.f[k] = p.f[k] === v ? null : v;
+    savePoint(p).catch(() => {});
+    if ((FORMS[p.type] || []).some(d => d.iff)) rr();
+    else for (const b of $$(`[data-a="chip"][data-k="${k}"]`)) b.classList.toggle('on', el.dataset.m === '1' ? (p.f[k] || []).includes(b.dataset.v) : p.f[k] === b.dataset.v);
+  },
+  'copy-prev'() {
+    const p = curPt(), i = S.pts.indexOf(p);
+    for (let j = i - 1; j >= 0; j--) {
+      const q = S.pts[j];
+      if (q.type !== 'opora') continue;
+      for (const k of COPY_KEYS) if (q.f[k] != null) p.f[k] = q.f[k];
+      savePoint(p).catch(() => {}); rr(); toast(`Отметки взяты с Т${q.n} — проверьте`); return;
+    }
+  },
+  cam(el) {
+    const p = curPt(); if (!p) return;
+    S.pend = {pid: p.id, slot: el.dataset.slot, head: COMPASS.fresh(), g: GPS.fresh(15000), gal: false};
+    if ($('#sheet')) setTimeout(closeSheet, 400);
+  },
+  gal() { const p = curPt(); if (p) S.pend = {pid: p.id, slot: MORE, head: null, g: null, gal: true}; },
+  async 'ph-view'(el) {
+    const p = curPt(), sl = el.dataset.slot, fs = p.photos.filter(f => f.slot === sl), urls = [];
+    sheet(`<h3>Т${p.n} · ${esc(sl)}</h3>` + fs.map(f => `<div class="card" style="padding:8px"><img data-full="${f.id}" alt="" style="width:100%;display:block;border-radius:8px;min-height:140px;background:rgba(127,127,127,.2)"><div class="row small mut" style="margin-top:6px;justify-content:space-between"><span>${fmtT(f.time)} · ${f.w}×${f.h} · ${fmtMB(f.size)}${f.acc != null ? ` · ±${fmtM(f.acc)} м` : ''}${f.gal ? ' · из галереи' : ''}</span><button class="btn red" style="flex:0 0 auto" data-a="ph-del" data-id="${f.id}">Удалить</button></div></div>`).join('')
+      + `<div class="row"><label class="btn pri" for="inCam" data-a="cam" data-slot="${esc(sl)}">Ещё снимок</label><button class="btn" data-a="sheet-close">Закрыть</button></div>`, () => urls.forEach(u => URL.revokeObjectURL(u)));
+    for (const im of $$('#sheet img[data-full]')) {
+      const r = await DB.get('files', im.dataset.full);
+      if (r && $('#sheet')) { const u = URL.createObjectURL(new Blob([r.data], {type: 'image/jpeg'})); urls.push(u); im.src = u; }
+    }
+  },
+  async 'ph-del'(el) {
+    const p = curPt(), id = el.dataset.id;
+    if (!confirm('Удалить это фото?')) return;
+    p.photos = p.photos.filter(f => f.id !== id);
+    await DB.del('files', id); await DB.del('thumbs', id); dropURL(id);
+    await savePoint(p); closeSheet(); rr();
+  },
+  async rec() {
+    if (REC.on) { await REC.stop(); rr(); return; }
+    try { await REC.start(curPt()); } catch (e) { toast('Микрофон недоступен: ' + errMsg(e), 6000); return; }
+    rr();
+  },
+  'au-play'(el) {
+    const u = AU.get(el.dataset.id);
+    if (!u) { toast('Загружаю запись — нажмите ещё раз'); fillMedia(); return; }
+    if (PLAY) PLAY.pause();
+    PLAY = new Audio(u); PLAY.play().catch(e => toast('Не играет: ' + e.message));
+  },
+  async 'au-del'(el) {
+    const p = curPt(), id = el.dataset.id;
+    if (!confirm('Удалить голосовую заметку?')) return;
+    p.audio = p.audio.filter(a => a.id !== id);
+    await DB.del('files', id); dropURL(id); await savePoint(p); rr();
+  },
+  async zip(el) {
+    if (S.busy) return;
+    flushSave();
+    S.busy = true; el.disabled = true; const t0 = el.textContent; el.textContent = 'Собираю…';
+    try { S.zip = await buildZip(el.dataset.full === '1', (i, n) => { el.textContent = `Собираю… ${i} из ${n}`; }); rr(); }
+    catch (e) { console.error(e); toast('Архив не собрался: ' + errMsg(e), 8000); el.disabled = false; el.textContent = t0; }
+    finally { S.busy = false; }
+  },
+  'zip-reset'() { S.zip = null; rr(); },
+  share() {
+    const z = S.zip; if (!z) return;
+    let file = new File([z.blob], z.name, {type: 'application/zip'});
+    if (navigator.canShare && !navigator.canShare({files: [file]})) file = new File([z.blob], z.name, {type: 'application/octet-stream'});
+    if (navigator.share && navigator.canShare && navigator.canShare({files: [file]})) {
+      navigator.share({files: [file], title: z.name}).then(() => toast('Готово'), e => { if (e && e.name !== 'AbortError') toast('Не отправилось: ' + e.message + '. Нажмите «Сохранить в Файлы».', 8000); });
+    } else { toast('Отправка отсюда недоступна — сохраняю в «Файлы»', 5000); download(z.blob, z.name); }
+  },
+  save() { if (S.zip) download(S.zip.blob, S.zip.name); },
+  'set-photo'(el) { SET.photoMax = Number(el.dataset.v); saveSet(); rr(); },
+};
+
+document.addEventListener('click', e => {
+  const el = e.target.closest('[data-a]'); if (!el || el.disabled) return;
+  const fn = ACT[el.dataset.a]; if (!fn) return;
+  if (el.tagName !== 'LABEL') e.preventDefault();
+  try { const r = fn(el, e); if (r && r.catch) r.catch(err => { console.error(err); toast('Ошибка: ' + errMsg(err), 8000); }); }
+  catch (err) { console.error(err); toast('Ошибка: ' + errMsg(err), 8000); }
+});
+document.addEventListener('input', e => {
+  const el = e.target, k = el.dataset && el.dataset.f; if (!k) return;
+  const p = curPt(); if (!p) return;
+  if (k === 'note') p.note = el.value; else p.f[k] = el.value;
+  queueSave(p);
+});
+document.addEventListener('change', e => { if (e.target.dataset && e.target.dataset.f) flushSave(); });
+document.addEventListener('visibilitychange', () => { if (document.hidden) flushSave(); });
+window.addEventListener('pagehide', flushSave);
+$('#inCam').addEventListener('change', e => onFiles(e.target));
+$('#inGal').addEventListener('change', e => onFiles(e.target));
+$('#inTask').addEventListener('change', async e => {
+  const f = e.target.files[0]; e.target.value = ''; closeSheet();
+  if (!f) return;
+  let t;
+  try { const txt = await f.text(); t = /\.kml$/i.test(f.name) || txt.trim().startsWith('<') ? kmlToTask(txt, f.name.replace(/\.[^.]+$/, '')) : await decodeTask(txt); }
+  catch (err) { toast('Не получилось прочитать задание: ' + err.message, 7000); return; }
+  await useTask(t);
+});
+window.addEventListener('popstate', async e => {
+  flushSave(); closeSheet();
+  const s = e.state || {view: 'home'};
+  if (s.view === 'home' || !s.sid) { Object.assign(S, {view: 'home', sid: null, survey: null, pts: [], pid: null}); render(); return; }
+  if (s.sid !== S.sid) { try { await loadSurvey(s.sid); } catch (err) { Object.assign(S, {view: 'home'}); render(); return; } }
+  if (REC.on) REC.stop();
+  Object.assign(S, {view: s.view, pid: s.pid, tab: s.tab || 'pts'});
+  render();
+});
+window.addEventListener('error', e => toast('Ошибка: ' + (e.message || 'неизвестная'), 8000));
+window.addEventListener('unhandledrejection', e => toast('Ошибка: ' + errMsg(e.reason), 8000));
+
+(async function init() {
+  try { await DB.open(); }
+  catch (e) { app().innerHTML = `<main><div class="card">Хранилище не открылось: ${esc(errMsg(e))}. Не открывайте программу в «Частном доступе» Safari.</div></main>`; return; }
+  if ('serviceWorker' in navigator && (location.protocol === 'https:' || location.hostname === 'localhost')) {
+    if (/nosw/.test(location.search)) navigator.serviceWorker.getRegistrations().then(rs => rs.forEach(r => r.unregister())).catch(() => {});
+    else navigator.serviceWorker.register('sw.js').catch(() => {});
+  }
+  const h = location.hash, saved = history.state;
+  if (/[#&][zt]=/.test(h)) {
+    history.replaceState(st(0), '', location.pathname + location.search);
+    try { await useTask(await decodeTask(h)); return; } catch (e) { toast('Ссылка-задание не прочиталась: ' + e.message, 8000); }
+  } else if (saved && saved.sid) {          // страница перезагрузилась (например, после камеры) — возвращаемся туда же
+    try { await loadSurvey(saved.sid); Object.assign(S, {view: saved.view, tab: saved.tab || 'pts', pid: saved.pid}); } catch (e) { S.view = 'home'; }
+  }
+  history.replaceState(st(depth()), '');
+  render();
+})();
+window.OBS = {S, DB, GPS, COMPASS, ACT, buildZip, addPhoto, exifBlock, withExif, makeZip, decodeTask, kmlToTask, useTask, render};
+</script>
+</body>
+</html>
