@@ -124,7 +124,7 @@ li{margin:5px 0}
 <script>
 'use strict';
 // Обследование трассы ВОЛС — РНД-Строй. Один файл, без сервера: данные в телефоне (IndexedDB), выгрузка ZIP.
-const VER = '1.1.0 · 27.10.2026';
+const VER = '1.1.1 · 29.10.2026';
 const DECL = 8.5;            // магнитное склонение, Ростов-на-Дону, ° к востоку (азимут по компасу + DECL = истинный)
 const FIX_S = 5;             // сколько секунд стоять у точки, пока пишутся координаты (Е. 27.10: 10 с — долго)
 const TRK_ACC = 25;          // трек: замеры хуже ±25 м не пишем
@@ -291,20 +291,27 @@ function brg(a, b) {           // истинный азимут a → b, гра�
   return (Math.atan2(Math.sin(dl) * Math.cos(f2), Math.cos(f1) * Math.sin(f2) - Math.sin(f1) * Math.cos(f2) * Math.cos(dl)) / RAD + 360) % 360;
 }
 // ход машины для точки «из машины»: по GPS в движении или по компасу (записаны в точке), иначе — от предыдущей точки
-function courseOf(p) {
+function courseOf(p, list = S.pts) {
   if (p.course != null) return {deg: p.course, src: p.courseSrc};
   if (p.lat == null) return null;
-  for (let j = S.pts.indexOf(p) - 1; j >= 0; j--) {
-    const q = S.pts[j]; if (q.lat == null) continue;
+  for (let j = list.indexOf(p) - 1; j >= 0; j--) {
+    const q = list[j]; if (q.lat == null) continue;
     return dist(q, p) >= 5 ? {deg: brg(q, p), src: 'prev'} : null;
   }
   return null;
 }
 // где стоит сама опора: у опоры — точка съёмки; в стороне — сдвиг по компасу и расстоянию; из машины — вбок от хода машины
-function pos(p) {
-  if (!p || p.lat == null || p.lon == null) return null;
+function positionIssue(p, list = S.pts) {
+  if (!p || !Number.isFinite(p.lat) || !Number.isFinite(p.lon) || Math.abs(p.lat) > 90 || Math.abs(p.lon) > 180) return 'Нет координат';
+  if (p.src !== 'map' && ['pending', 'refining', 'missing'].includes(p.fixStatus)) return p.fixStatus === 'refining' ? 'GPS ещё уточняется' : 'Нет новой фиксации GPS — переснимите точку';
+  if (p.mode === 's' && (!Number.isFinite(p.az) || !Number.isFinite(p.d) || p.d <= 0)) return 'Для точки в стороне задайте направление и расстояние';
+  if (p.mode === 'c' && (!['L', 'R'].includes(p.side) || !Number.isFinite(p.d) || p.d <= 0 || !courseOf(p, list))) return 'Для точки из машины задайте сторону, расстояние и ход машины';
+  return '';
+}
+function pos(p, list = S.pts) {
+  if (positionIssue(p, list)) return null;
   if (p.mode === 's' && p.az != null && p.d > 0) return shift(p.lat, p.lon, p.az + DECL, p.d);
-  if (p.mode === 'c' && p.side && p.d > 0) { const c = courseOf(p); if (c) return shift(p.lat, p.lon, c.deg + (p.side === 'R' ? 90 : -90), p.d); }
+  if (p.mode === 'c' && p.side && p.d > 0) { const c = courseOf(p, list); if (c) return shift(p.lat, p.lon, c.deg + (p.side === 'R' ? 90 : -90), p.d); }
   return {lat: p.lat, lon: p.lon};
 }
 const MODE_NAME = {u: 'у опоры', s: 'в стороне', c: 'из машины'};
@@ -318,14 +325,14 @@ function grp(p) {
   return TT(p).grp || null;
 }
 // пролёт: до предыдущей точки того же участка; трек или смена подвеса на канализацию — новый участок, пролёта нет
-function span(p) {
+function span(p, list = S.pts) {
   const g = grp(p); if (g !== 'air' && g !== 'kan') return null;
-  const a = pos(p); if (!a) return null;
-  for (let j = S.pts.indexOf(p) - 1; j >= 0; j--) {
-    const q = S.pts[j], h = grp(q);
+  const a = pos(p, list); if (!a) return null;
+  for (let j = list.indexOf(p) - 1; j >= 0; j--) {
+    const q = list[j], h = grp(q);
     if (!h) continue;
     if (h !== g) return null;
-    const b = pos(q); return b ? dist(a, b) : null;
+    const b = pos(q, list); return b ? dist(a, b) : null;
   }
   return null;
 }
@@ -335,7 +342,7 @@ function runs(list) {
   for (const p of list) {
     const g = grp(p); if (!g) continue;
     if (g === 'trek') { cur = null; continue; }
-    const q = pos(p); if (!q) continue;
+    const q = pos(p, list); if (!q) { cur = null; continue; }
     if (!cur || cur.g !== g) { cur = {g, pts: []}; out.push(cur); }
     cur.pts.push({p, q});
   }
@@ -415,15 +422,15 @@ const st = d => ({view: S.view, sid: S.sid, pid: S.pid, tab: S.tab, d});
 const depth = () => (history.state && history.state.d) || 0;
 
 let lastSvSave = 0;
-function saveSurvey() { S.survey.upd = Date.now(); lastSvSave = Date.now(); return DB.put('surveys', S.survey); }
+function saveSurvey() { S.zip = null; S.survey.upd = Date.now(); lastSvSave = Date.now(); return DB.put('surveys', S.survey); }
 function savePoint(p) {
   p.upd = Date.now(); S.zip = null;
   if (S.survey && Date.now() - lastSvSave > 5000) saveSurvey().catch(() => {});
   return DB.put('points', p).catch(e => { toast('Не сохранилось: ' + errMsg(e), 7000); throw e; });
 }
 let saveT = null, saveP = null;
-function queueSave(p) { saveP = p; clearTimeout(saveT); saveT = setTimeout(flushSave, 500); }
-function flushSave() { clearTimeout(saveT); saveT = null; if (saveP) { const p = saveP; saveP = null; savePoint(p).catch(() => {}); } }
+function queueSave(p) { S.zip = null; saveP = p; clearTimeout(saveT); saveT = setTimeout(() => flushSave().catch(() => {}), 500); }
+function flushSave() { clearTimeout(saveT); saveT = null; if (saveP) { const p = saveP; saveP = null; return savePoint(p); } return Promise.resolve(); }
 
 async function loadSurvey(id) {
   const s = await DB.get('surveys', id);
@@ -449,7 +456,7 @@ const GPS = {
     if (!navigator.geolocation) { this.err = {code: 0, message: 'нет GPS в браузере'}; this.emit(); return; }
     this.w = navigator.geolocation.watchPosition(p => {
       const c = p.coords;
-      this.last = {lat: c.latitude, lon: c.longitude, acc: c.accuracy, alt: c.altitude, t: Date.now()};
+      this.last = {lat: c.latitude, lon: c.longitude, acc: c.accuracy, alt: c.altitude, t: Number.isFinite(p.timestamp) ? p.timestamp : Date.now()};
       // направление движения — только на ходу (от 7 км/ч), стоя iPhone его не даёт
       if (c.speed != null && c.speed >= 2 && c.heading != null && isFinite(c.heading) && c.heading >= 0) this.course = {deg: c.heading, t: Date.now()};
       this.err = null; this.emit();
@@ -491,7 +498,9 @@ const Refine = {
   start(pid) {
     this.stop(true);
     this.pid = pid; this.sm = []; this.t0 = Date.now(); this.first = 0;
-    this.fn = g => { if (g) this.add(g); };
+    const p = S.pts.find(q => q.id === pid);
+    if (p) { p.fixStatus = 'pending'; savePoint(p).catch(() => {}); }
+    this.fn = g => { if (g && Date.now() - g.t < 2000) this.add(g); };
     GPS.subs.add(this.fn);
     const g = GPS.fresh(2000); if (g) this.add(g);      // старый замер (человек ещё шёл) не берём — он стал бы опорным
     this.timer = setInterval(() => {
@@ -512,17 +521,19 @@ const Refine = {
     this.sm.push(g); if (!this.first) this.first = Date.now();
     const p = S.pts.find(q => q.id === this.pid); if (!p) return;
     const fx = avgFix(this.sm);
-    Object.assign(p, {lat: fx.lat, lon: fx.lon, acc: fx.acc, alt: fx.alt, fixN: fx.n, fixT: fx.t, src: 'gps'});
+    Object.assign(p, {lat: fx.lat, lon: fx.lon, acc: fx.acc, alt: fx.alt, fixN: fx.n, fixT: fx.t, src: 'gps', fixStatus: 'refining'});
     savePoint(p).catch(() => {}); updCoord(p);
   },
   stop(silent) {
     if (this.fn) GPS.subs.delete(this.fn);
     this.fn = null; clearInterval(this.timer); this.timer = null;
     const pid = this.pid; this.pid = null;
-    if (!silent && pid) {
+    if (pid) {
       const p = S.pts.find(q => q.id === pid); if (!p) return;
+      p.fixStatus = this.sm.length ? (this.first && Date.now() - this.first >= FIX_S * 1000 ? 'ok' : 'partial') : 'missing';
+      savePoint(p).catch(() => {});
       updCoord(p);
-      toast(p.lat == null ? `Т${p.n}: GPS не поймался — поставьте точку «На карте»` : `✓ Т${p.n}: координаты записаны — можно отходить и снимать`, 3500);
+      if (!silent) toast(p.fixStatus === 'missing' ? `Т${p.n}: новых замеров GPS нет — переснимите или поставьте точку «На карте»` : p.fixStatus === 'partial' ? `Т${p.n}: записаны предварительные координаты — уточнение прервано` : `✓ Т${p.n}: координаты записаны — можно отходить и снимать`, 4500);
     }
   },
 };
@@ -556,12 +567,14 @@ const TRK = {
     if (l) {
       if (l[3] >= g.t) return;
       const d = dist(vx(l), g);
+      if (g.t - l[3] > 15000) this.gap = true;   // перерыв GPS: неизвестный путь не соединяем прямой
       if (!this.gap && d < Math.max(3, g.acc * 0.6)) return;
       if (!this.gap && d > 60 && d / ((g.t - l[3]) / 1000) > 40) return;     // скачок GPS (быстрее 140 км/ч)
     }
     v.push([Math.round(g.lat * 1e7) / 1e7, Math.round(g.lon * 1e7) / 1e7, Math.round(g.acc * 10) / 10, g.t]);
     if (this.gap && v.length > 1) (p.gaps || (p.gaps = [])).push(v.length - 1);
     this.gap = false;
+    S.zip = null;
     if (p.lat == null) Object.assign(p, {lat: g.lat, lon: g.lon, acc: g.acc, alt: g.alt, fixN: 1, fixT: g.t});   // точка трека — его начало
     if (v.length === 1 || Date.now() - this.saved > 8000) { this.saved = Date.now(); savePoint(p).catch(() => {}); }
     updTrk(p);
@@ -575,8 +588,9 @@ const TRK = {
   },
 };
 function trkFlush() { const p = TRK.pid && S.pts.find(q => q.id === TRK.pid); if (p) { TRK.saved = Date.now(); savePoint(p).catch(() => {}); } }
-document.addEventListener('visibilitychange', () => { if (!TRK.pid) return; if (document.hidden) trkFlush(); else WAKE.on(); });
-window.addEventListener('pagehide', trkFlush);     // свернули или закрыли — последние метры трека не терять
+function trkSuspend() { if (TRK.pid) { TRK.gap = true; trkFlush(); } }
+document.addEventListener('visibilitychange', () => { if (!TRK.pid) return; if (document.hidden) trkSuspend(); else WAKE.on(); });
+window.addEventListener('pagehide', trkSuspend);
 const BEARING = {k: false};    // что засекаем компасом: false — направление на опору, true — ход машины
 const COMPASS = {
   h: null, acc: null, t: 0, on: false, subs: new Set(),
@@ -734,35 +748,39 @@ async function fillMedia() {
 
 // ---------------------------------------------------------------- голосовые заметки
 const REC = {
-  on: false, mr: null, st: null, ch: [], t0: 0, pid: null,
+  on: false, mr: null, st: null, ch: [], t0: 0, pid: null, point: null, stopping: null,
   async start(p) {
+    if (this.on || this.stopping) throw new Error('дождитесь сохранения предыдущей записи');
     if (!navigator.mediaDevices || !window.MediaRecorder) throw new Error('запись звука не поддерживается');
     this.st = await navigator.mediaDevices.getUserMedia({audio: true});
     const ty = ['audio/mp4', 'audio/aac', 'audio/webm;codecs=opus', 'audio/webm'].find(t => MediaRecorder.isTypeSupported && MediaRecorder.isTypeSupported(t));
     this.mr = new MediaRecorder(this.st, ty ? {mimeType: ty} : {});
     this.ch = []; this.mr.ondataavailable = e => { if (e.data && e.data.size) this.ch.push(e.data); };
-    this.mr.start(); this.on = true; this.t0 = Date.now(); this.pid = p.id;
+    this.mr.start(); this.on = true; this.t0 = Date.now(); this.pid = p.id; this.point = p;
   },
   stop() {
-    return new Promise(res => {
+    if (this.stopping) return this.stopping;
+    const p = this.point || S.pts.find(q => q.id === this.pid), stream = this.st, chunks = this.ch, started = this.t0;
+    const done = new Promise(res => {
       const mr = this.mr; if (!mr) { this.on = false; res(); return; }
       mr.onstop = async () => {
         try {
-          this.st.getTracks().forEach(t => t.stop());
+          stream.getTracks().forEach(t => t.stop());
           const type = (mr.mimeType || 'audio/mp4').split(';')[0];
-          const blob = new Blob(this.ch, {type});
-          const p = S.pts.find(q => q.id === this.pid);
+          const blob = new Blob(chunks, {type});
           if (p && blob.size) {
             const id = uid(), data = await blob.arrayBuffer();
             await DB.put('files', {id, survey: p.survey, point: p.id, kind: 'audio', type, data});
-            p.audio.push({id, time: this.t0, dur: (Date.now() - this.t0) / 1000, size: data.byteLength, type});
+            p.audio.push({id, time: started, dur: (Date.now() - started) / 1000, size: data.byteLength, type});
             await savePoint(p);
           }
         } catch (e) { toast('Запись не сохранилась: ' + errMsg(e), 6000); }
-        this.on = false; this.mr = null; res();
+        this.on = false; this.mr = null; this.point = null; res();
       };
-      mr.stop();
+      try { mr.stop(); } catch (e) { this.on = false; this.mr = null; stream.getTracks().forEach(t => t.stop()); toast('Запись не остановлена: ' + errMsg(e), 6000); res(); }
     });
+    this.stopping = done.finally(() => { this.stopping = null; });
+    return this.stopping;
   },
 };
 let PLAY = null;
@@ -770,10 +788,10 @@ let PLAY = null;
 // ---------------------------------------------------------------- задание: ссылка, KML, JSON
 function normTask(o) {
   if (!o || typeof o !== 'object') throw new Error('не тот формат');
-  const num = v => { const x = Number(v); if (!isFinite(x)) throw new Error('неверные координаты'); return x; };
+  const num = (v, max) => { if ((typeof v !== 'number' && typeof v !== 'string') || String(v).trim() === '') throw new Error('координаты не заполнены'); const x = Number(v); if (!Number.isFinite(x) || Math.abs(x) > max) throw new Error('неверные координаты'); return x; };
   const rs = o.routes || (o.route ? [{name: 'Трасса', pts: o.route}] : []);
-  const routes = rs.map(r => ({name: String(r.name || 'Трасса'), pts: (Array.isArray(r) ? r : r.pts || []).map(a => [num(a[0]), num(a[1])])})).filter(r => r.pts.length > 1);
-  const points = (o.points || []).map((q, i) => ({n: String(q.n != null ? q.n : i + 1), name: String(q.name || ''), lat: num(q.lat), lon: num(q.lon), text: String(q.text || '')}));
+  const routes = rs.map(r => ({name: String(r.name || 'Трасса'), pts: (Array.isArray(r) ? r : r.pts || []).map(a => [num(a[0], 90), num(a[1], 180)])})).filter(r => r.pts.length > 1);
+  const points = (o.points || []).map((q, i) => ({n: String(q.n != null ? q.n : i + 1), name: String(q.name || ''), lat: num(q.lat, 90), lon: num(q.lon, 180), text: String(q.text || '')}));
   return {name: String(o.name || 'Задание'), note: String(o.note || ''), routes, points};
 }
 function kmlToTask(text, fname) {
@@ -914,7 +932,9 @@ function readme(o, full) {
     'Номера точек после удаления не сдвигаются — пропуск в нумерации значит, что точку удалили.', ''].join('\r\n');
 }
 async function buildZip(full, prog) {
-  const s = S.survey, pts = [...S.pts].sort((a, b) => a.n - b.n), files = [], ts = Date.now();
+  if (REC.on || REC.stopping) await REC.stop();
+  await flushSave();
+  const s = JSON.parse(JSON.stringify(S.survey)), pts = JSON.parse(JSON.stringify(S.pts)).sort((a, b) => a.n - b.n), files = [], missing = [], ts = Date.now();
   const out = {app: 'rnd-obsled', ver: VER, exported: new Date(ts).toISOString(), decl: DECL, photoMax: SET.photoMax,
     survey: {id: s.id, name: s.name, created: new Date(s.cr).toISOString(), task: s.task || null}, points: [],
     lines: runs(pts).map(r => {
@@ -922,12 +942,13 @@ async function buildZip(full, prog) {
       return {type: GRP_NAME[r.g], points: r.pts.map(x => code(x.p)), m: Math.round(m * 10) / 10};
     })};
   for (const p of pts) {
-    const q = pos(p), T = TT(p), sp = span(p), tr = p.type === 'trek';
+    const q = pos(p, pts), T = TT(p), sp = span(p, pts), tr = p.type === 'trek';
     const P = {n: p.n, code: code(p), type: p.type, typeName: T.name, line: GRP_NAME[grp(p)] || null, lat: p.lat, lon: p.lon, acc: p.acc, alt: p.alt, fixN: p.fixN,
       fixTime: p.fixT ? new Date(p.fixT).toISOString() : null, src: p.src, mode: away(p) ? MODE_NAME[p.mode] : T.at,
       azMag: p.az, azAcc: p.azAcc == null ? null : p.azAcc, distM: p.d, poleLat: q ? q.lat : null, poleLon: q ? q.lon : null,
       side: p.mode === 'c' ? ({L: 'слева', R: 'справа'}[p.side] || null) : null,
-      courseTrue: p.mode === 'c' && courseOf(p) ? Math.round(courseOf(p).deg) : null, courseSrc: p.mode === 'c' && courseOf(p) ? courseOf(p).src : null,
+      positionStatus: q ? (p.src === 'map' ? 'map' : away(p) ? 'calculated' : 'gps') : 'unconfirmed', positionIssue: positionIssue(p, pts), fixStatus: p.fixStatus || null,
+      courseTrue: p.mode === 'c' && courseOf(p, pts) ? Math.round(courseOf(p, pts).deg) : null, courseSrc: p.mode === 'c' && courseOf(p, pts) ? courseOf(p, pts).src : null,
       spanM: sp == null ? null : Math.round(sp * 10) / 10, fields: p.f, fieldsText: fieldsText(p), note: p.note,
       created: new Date(p.cr).toISOString(), photos: [], audio: []};
     if (tr) {
@@ -942,16 +963,17 @@ async function buildZip(full, prog) {
     for (const f of p.photos) {
       k++; const name = `foto/${P.code}_${k}.jpg`;
       P.photos.push({file: name, slot: f.slot, time: new Date(f.time).toISOString(), w: f.w, h: f.h, size: f.size, lat: f.lat, lon: f.lon, acc: f.acc, dirMag: f.dir, fromGallery: !!f.gal});
-      if (full) { const r = await DB.get('files', f.id); if (r) files.push({name, data: r.data, date: new Date(f.time)}); }
+      if (full) { const r = await DB.get('files', f.id); if (r && r.data && r.data.byteLength) files.push({name, data: r.data, date: new Date(f.time)}); else missing.push(name); }
     }
     k = 0;
     for (const a of p.audio) {
       k++; const name = `golos/${P.code}_${k}.${/webm/.test(a.type) ? 'webm' : 'm4a'}`;
       P.audio.push({file: name, time: new Date(a.time).toISOString(), dur: Math.round(a.dur), size: a.size});
-      if (full) { const r = await DB.get('files', a.id); if (r) files.push({name, data: r.data, date: new Date(a.time)}); }
+      if (full) { const r = await DB.get('files', a.id); if (r && r.data && r.data.byteLength) files.push({name, data: r.data, date: new Date(a.time)}); else missing.push(name); }
     }
     out.points.push(P);
   }
+  if (missing.length) throw new Error(`Не найдены вложения (${missing.length}): ${missing.slice(0, 12).join(', ')}. Полный архив не создан. Сохраните доступные данные кнопкой «Только точки и таблица, без фото».`);
   files.unshift({name: 'obsledovanie.json', data: JSON.stringify(out, null, 1)}, {name: 'tochki.kml', data: kmlOut(out)},
     {name: 'vedomost.csv', data: csvOut(out)}, {name: 'PROCHTI.txt', data: readme(out, full)});
   const blob = await makeZip(files, prog);
@@ -1168,9 +1190,9 @@ function tTask() {
 function tExp() {
   const n = S.pts.length, ph = S.pts.reduce((a, p) => a + p.photos.length, 0), au = S.pts.reduce((a, p) => a + p.audio.length, 0);
   const size = S.pts.reduce((a, p) => a + p.photos.reduce((b, f) => b + (f.size || 0), 0) + p.audio.reduce((b, f) => b + (f.size || 0), 0), 0);
-  const noC = S.pts.filter(p => p.lat == null && p.type !== 'trek');
+  const noC = S.pts.filter(p => !pos(p) && p.type !== 'trek');
   let h = `<div class="card">Точек <b>${n}</b> · фото <b>${ph}</b>${au ? ` · голосовых <b>${au}</b>` : ''} · ≈${fmtMB(size)}`;
-  if (noC.length) h += `<div style="color:var(--bad);margin-top:6px">Без координат: ${noC.map(p => 'Т' + p.n).join(', ')} — откройте точку и нажмите «📍 Записать координаты» или «На карте».</div>`;
+  if (noC.length) h += `<div style="color:var(--bad);margin-top:6px">Положение не подтверждено: ${noC.map(p => 'Т' + p.n + ' — ' + esc(positionIssue(p))).join('; ')}. Откройте точки и уточните данные.</div>`;
   h += '</div>';
   if (S.zip) {
     h += `<div class="card"><div>Архив собран${S.zip.full ? '' : ' (без фото)'}: <b>${fmtMB(S.zip.blob.size)}</b></div><div class="small mut" style="margin:4px 0 10px;word-break:break-all">${esc(S.zip.name)}</div>
@@ -1207,6 +1229,9 @@ function statHtml(p) {
   }
   if (p.lat == null) return `<div class="stat no">Координат нет<div class="sub">Встаньте вплотную (${T.at}) и нажмите «📍 Записать координаты» или поставьте точку «На карте»</div></div>`;
   if (p.src === 'map') return '<div class="stat done">✓ Поставлено на карте</div>';
+  const issue = positionIssue(p);
+  if (issue) return `<div class="stat wait">⚠ ${esc(issue)}<div class="sub">Положение телефона сохранено отдельно. Положение объекта пока не подтверждено.</div></div>`;
+  if (p.fixStatus === 'partial') return '<div class="stat wait">⚠ Предварительные координаты<div class="sub">Уточнение GPS прервано. При необходимости нажмите «Переснять».</div></div>';
   if (p.acc > 15) return `<div class="stat wait">⚠ Записано, но точность слабая: ±${fmtM(p.acc)} м<div class="sub">Нажмите «📍 Переснять» ${at} или поставьте точку «На карте» по месту</div></div>`;
   const sub = p.mode === 's' ? T.obj + ' — по направлению и расстоянию ниже'
     : p.mode === 'c' ? (p.side && p.d ? `${T.obj} ${p.side === 'R' ? 'справа' : 'слева'} от машины, ${p.d} м${courseOf(p) ? '' : ' — ход машины не известен, засеките ниже'}` : 'Ниже: с какой стороны и сколько метров')
@@ -1332,8 +1357,8 @@ async function render() {
 }
 function rr() { const y = window.scrollY; render().then(() => window.scrollTo(0, y)); }
 function go(view, o = {}, push = true) {
+  if (REC.on || REC.stopping) return REC.stop().then(() => go(view, o, push));
   flushSave();
-  if (REC.on) REC.stop().then(() => { if (S.view === 'point') rr(); });
   Object.assign(S, {view}, o);
   const d = depth();
   if (push) history.pushState(st(d + 1), ''); else history.replaceState(st(d), '');
@@ -1428,6 +1453,7 @@ const ACT = {
   async 'sv-del'() {
     if (!await ask(`Удалить обследование «${S.survey.name}» со всеми фото? Вернуть будет нельзя.`, 'Удалить', true)) return;
     if (S.pts.some(p => p.photos.length) && !await ask('Точно удалить? Архив выгружен и отправлен?', 'Да, удалить', true)) return;
+    if (REC.on || REC.stopping) await REC.stop();
     if (TRK.pid) TRK.stop(true);
     for (const k of await DB.keys('files', 'survey', S.sid)) { await DB.del('files', k); await DB.del('thumbs', k); dropURL(k); }
     for (const p of S.pts) await DB.del('points', p.id);
@@ -1492,9 +1518,9 @@ const ACT = {
   },
   'trk-map'() { const p = curPt(); S.focus = p.id; S.tab = 'map'; go('survey', {pid: null}); },
   'open-pt'(el) { go('point', {pid: el.dataset.id}); },
-  'pt-go'(el) {
+  async 'pt-go'(el) {
     if (!el.dataset.id) return;
-    flushSave(); if (REC.on) REC.stop();
+    flushSave(); if (REC.on || REC.stopping) await REC.stop();
     S.pid = el.dataset.id; history.replaceState(st(depth()), ''); render().then(() => window.scrollTo(0, 0));
   },
   'pt-move'(el) {
@@ -1508,6 +1534,7 @@ const ACT = {
   async 'pt-del'() {
     const p = curPt(); if (!p) return;
     if (!await ask(`Удалить точку Т${p.n} (${TT(p).name.toLowerCase()})${p.photos.length ? ` вместе с фото: ${p.photos.length}` : ''}?\nНомера других точек не изменятся.`, `Удалить Т${p.n}`, true)) return;
+    if ((REC.on || REC.stopping) && REC.pid === p.id) await REC.stop();
     if (Refine.pid === p.id) Refine.stop(true);
     if (TRK.pid === p.id) TRK.stop(true);
     if (saveP === p) { clearTimeout(saveT); saveT = null; saveP = null; }     // не записать удалённую обратно
@@ -1542,7 +1569,7 @@ const ACT = {
     const p = S.pts.find(q => q.id === S.place); if (!p || !MAP.m) return;
     const c = MAP.m.getCenter();
     if (Refine.pid === p.id) Refine.stop(true);
-    Object.assign(p, {lat: c.lat, lon: c.lng, acc: null, alt: null, src: 'map', fixN: 0, fixT: Date.now(), mode: 'u', d: null});
+    Object.assign(p, {lat: c.lat, lon: c.lng, acc: null, alt: null, src: 'map', fixN: 0, fixT: Date.now(), mode: 'u', d: null, fixStatus: 'map'});
     savePoint(p).catch(() => {});
     S.place = null; MAP.draw(); MAP.placeUI(); toast(`✓ Т${p.n} поставлена на карте`);
     if (depth() > 0) ACT.back();       // обратно в точку — снимать и отмечать дальше
@@ -1671,6 +1698,7 @@ $('#inTask').addEventListener('change', async e => {
 });
 window.addEventListener('popstate', async e => {
   flushSave(); closeSheet();
+  if (REC.on || REC.stopping) await REC.stop();
   const s = e.state || {view: 'home'};
   if (s.view === 'home' || !s.sid) { Object.assign(S, {view: 'home', sid: null, survey: null, pts: [], pid: null}); render(); return; }
   if (s.sid !== S.sid) { try { await loadSurvey(s.sid); } catch (err) { Object.assign(S, {view: 'home'}); render(); return; } }
