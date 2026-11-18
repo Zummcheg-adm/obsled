@@ -108,6 +108,9 @@ details summary{cursor:pointer}
 ol{padding-left:22px;margin:8px 0}
 li{margin:5px 0}
 </style>
+<style>
+.delivery-form label{display:block;margin:12px 0;font-weight:600}.delivery-form select,.delivery-form input:not([type=file]),.delivery-form textarea{display:block;width:100%;font:inherit;font-weight:400;color:var(--ink);background:var(--card);border:1px solid var(--line);border-radius:10px;padding:10px}.delivery-form select{white-space:normal}.delivery-form .row>*{flex:1;min-width:0}.delivery-form [hidden]{display:none}.delivery-form .btn{margin-top:4px}.delivery-list .it{width:100%;border:0;color:inherit;text-align:left}.delivery-list .t1{white-space:normal}.delivery-form .mut{font-weight:400}.delivery-files{overflow-wrap:anywhere}
+</style>
 </head>
 <body>
 <div id="app"></div>
@@ -121,10 +124,12 @@ li{margin:5px 0}
 <input type="file" id="inCam" class="vh" accept="image/*" capture="environment">
 <input type="file" id="inGal" class="vh" accept="image/*" multiple>
 <input type="file" id="inTask" class="vh">
+<input type="file" id="inDelivery" class="vh" accept=".zip,.json">
+<script src="handover.js?v=1.2.0"></script>
 <script>
 'use strict';
 // Обследование трассы ВОЛС — РНД-Строй. Один файл, без сервера: данные в телефоне (IndexedDB), выгрузка ZIP.
-const VER = '1.1.1 · 29.10.2026';
+const VER = '1.2.0 · 18.11.2026';
 const DECL = 8.5;            // магнитное склонение, Ростов-на-Дону, ° к востоку (азимут по компасу + DECL = истинный)
 const FIX_S = 5;             // сколько секунд стоять у точки, пока пишутся координаты (Е. 27.10: 10 с — долго)
 const TRK_ACC = 25;          // трек: замеры хуже ±25 м не пишем
@@ -855,14 +860,15 @@ async function makeZip(files, prog) {
   let off = 0;
   for (let i = 0; i < files.length; i++) {
     const f = files[i];
-    const u = typeof f.data === 'string' ? enc.encode(f.data) : f.data instanceof ArrayBuffer ? new Uint8Array(f.data) : f.data;
+    const u = typeof f.data === 'string' ? enc.encode(f.data) : f.data instanceof Blob ? new Uint8Array(await f.data.arrayBuffer()) : f.data instanceof ArrayBuffer ? new Uint8Array(f.data) : f.data;
     const nm = enc.encode(f.name), crc = crc32(u), d = f.date || new Date();
     const tm = (d.getHours() << 11) | (d.getMinutes() << 5) | (d.getSeconds() >> 1), dt = ((d.getFullYear() - 1980) << 9) | ((d.getMonth() + 1) << 5) | d.getDate();
     const lh = new Uint8Array(30 + nm.length), v = new DataView(lh.buffer);
     v.setUint32(0, 0x04034b50, true); v.setUint16(4, 20, true); v.setUint16(6, 0x0800, true); v.setUint16(8, 0, true);
     v.setUint16(10, tm, true); v.setUint16(12, dt, true); v.setUint32(14, crc, true); v.setUint32(18, u.length, true); v.setUint32(22, u.length, true);
     v.setUint16(26, nm.length, true); v.setUint16(28, 0, true); lh.set(nm, 30);
-    parts.push(lh, u);
+    if (u.length + off + lh.length >= 0xffffffff || files.length >= 65535) throw new Error('Архив превышает предел формата ZIP');
+    parts.push(lh, f.data instanceof Blob ? f.data : u);
     const ch = new Uint8Array(46 + nm.length), w = new DataView(ch.buffer);
     w.setUint32(0, 0x02014b50, true); w.setUint16(4, 20, true); w.setUint16(6, 20, true); w.setUint16(8, 0x0800, true); w.setUint16(10, 0, true);
     w.setUint16(12, tm, true); w.setUint16(14, dt, true); w.setUint32(16, crc, true); w.setUint32(20, u.length, true); w.setUint32(24, u.length, true);
@@ -1111,12 +1117,15 @@ function hdr(title, back, right = '', gps = true) {
 const isStandalone = () => window.navigator.standalone === true || (window.matchMedia && matchMedia('(display-mode: standalone)').matches);
 
 async function vHome() {
-  const sv = (await DB.all('surveys')).sort((a, b) => b.upd - a.upd);
+  const all = (await DB.all('surveys')).sort((a, b) => b.upd - a.upd);
+  const sv = all.filter(s => !s.delivery);
   const cnt = {};
   for (const p of await DB.all('points')) { const c = cnt[p.survey] || (cnt[p.survey] = {n: 0, f: 0}); c.n++; c.f += (p.photos || []).length; }
   let h = hdr('Обследование ВОЛС', false, '<button class="ib" data-a="help" aria-label="Как работать">?</button>', false) + '<main>';
   h += '<button class="btn pri big" data-a="new-survey">+ Новое обследование</button><div style="height:8px"></div>';
+  h += '<button class="btn big" data-a="delivery-start">Сдать объект</button><div style="height:8px"></div>';
   h += '<div class="row"><button class="btn" data-a="task-paste">Задание по ссылке</button><label class="btn" for="inTask" data-a="nop">Задание из файла</label></div>';
+  h += Delivery.home(all.filter(s => s.delivery));
   if (sv.length) h += '<h2>Обследования</h2>' + sv.map(s => {
     const c = cnt[s.id] || {n: 0, f: 0};
     return `<div class="it" data-a="open-survey" data-id="${s.id}"><div class="badge" style="background:#0f2740">${c.n}</div><div class="tx"><div class="t1">${esc(s.name)}</div><div class="t2">${fmtD(s.cr)} · точек ${c.n} · фото ${c.f}${s.task ? ' · есть задание' : ''}</div></div><div class="mut">›</div></div>`;
@@ -1177,7 +1186,7 @@ function tPts() {
   if (tp) h += `<div class="stat rec" id="trkBan" data-a="open-pt" data-id="${tp.id}" style="cursor:pointer">${trkBanHtml(tp)}</div>`;
   h += nearHint();
   if (!S.pts.length || (m !== 'air' && !S.pts.some(p => p.type === (m === 'kan' ? 'kolodec' : 'trek')))) h += `<div class="card"><b>Как работать — ${MODES.find(x => x[0] === m)[1].toLowerCase()}</b><ol class="small">${INTRO[m]}<li>В конце — вкладка «Выгрузка».</li></ol></div>`;
-  return h + S.pts.map(ptRow).join('');
+  return h + '<button class="btn big" data-a="delivery-source">Начать сдачу по обследованию</button>' + S.pts.map(ptRow).join('');
 }
 function tTask() {
   const t = S.survey.task;
@@ -1346,6 +1355,7 @@ async function render() {
   let h;
   if (S.view === 'home') h = await vHome();
   else if (!S.survey) { S.view = 'home'; h = await vHome(); }
+  else if (S.survey.delivery) { S.view = 'delivery'; h = Delivery.overview(); }
   else if (S.view === 'point' && curPt()) h = vPoint();
   else { S.view = 'survey'; h = vSurvey(); }
   if (tok !== RT) return;
@@ -1729,6 +1739,7 @@ window.addEventListener('unhandledrejection', e => toast('Ошибка: ' + errM
 })();
 // ссылка-задание открыта во вкладке, где программа уже открыта, — меняется только «#…»: перечитать как новую
 window.addEventListener('hashchange', () => { if (/[#&][zt]=/.test(location.hash)) location.reload(); });
+Delivery.install();
 window.OBS = {S, DB, GPS, COMPASS, TRK, ACT, buildZip, addPhoto, exifBlock, withExif, makeZip, decodeTask, kmlToTask, useTask, render};
 </script>
 </body>
