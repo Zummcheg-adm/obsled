@@ -125,11 +125,11 @@ li{margin:5px 0}
 <input type="file" id="inGal" class="vh" accept="image/*" multiple>
 <input type="file" id="inTask" class="vh">
 <input type="file" id="inDelivery" class="vh" accept=".zip,.json">
-<script src="handover.js?v=1.2.0"></script>
+<script src="handover.js?v=1.2.1"></script>
 <script>
 'use strict';
 // Обследование трассы ВОЛС — РНД-Строй. Один файл, без сервера: данные в телефоне (IndexedDB), выгрузка ZIP.
-const VER = '1.2.0 · 18.11.2026';
+const VER = '1.2.1 · 18.11.2026';
 const DECL = 8.5;            // магнитное склонение, Ростов-на-Дону, ° к востоку (азимут по компасу + DECL = истинный)
 const FIX_S = 5;             // сколько секунд стоять у точки, пока пишутся координаты (Е. 27.10: 10 с — долго)
 const TRK_ACC = 25;          // трек: замеры хуже ±25 м не пишем

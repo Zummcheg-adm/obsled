@@ -50,7 +50,8 @@ const Delivery = (() => {
       <div class="row">${button('new-node','+ Опора','data-kind="air"')}${button('new-node','+ Колодец','data-kind="kan"')}</div></div>
       <h2>Отрезки кабеля</h2>${cables}${button('new-cable','+ Отрезок кабеля',d.nodes.length < 2 ? 'disabled title="Сначала добавьте две точки"' : '')}
       <h2>Итоговый отчёт</h2>${issues.length ? '<details class="card"><summary>Что осталось заполнить ('+issues.length+')</summary><ul>'+issues.map(s=>'<li>'+esc(s)+'</li>').join('')+'</ul></details>' : '<div class="card">Замеры, метки и фотографии заполнены</div>'}
-      ${S.zip ? '<div class="card small">'+esc(S.zip.name)+' · '+fmtMB(S.zip.blob.size)+'</div><div class="row"><button class="btn pri" data-a="share">Отправить архив</button><button class="btn" data-a="save">Сохранить ZIP</button></div>' : button('export','Собрать один архив','','pri big')}</main>`;
+      ${S.zip ? '<div class="card small">'+esc(S.zip.name)+' · '+fmtMB(S.zip.blob.size)+'</div><div class="row"><button class="btn pri" data-a="share">Отправить архив</button><button class="btn" data-a="save">Сохранить ZIP</button></div>' : button('export','Собрать один архив','','pri big')}
+      <p>${button('delete','Удалить эту сдачу',attrId(S.sid),'red big')}</p></main>`;
   }
   const remaining = d => d.plan.filter(p => !d.nodes.some(n => n.planId === p.id));
   function planFrom(o) {
@@ -274,10 +275,41 @@ const Delivery = (() => {
       if(S.sid===s.id && S.survey.delivery.revision===s.delivery.revision){S.zip=result;rr();}
     } finally {el.disabled=false;S.busy=false;el.textContent='Собрать один архив';}
   }
+  async function deleteDelivery(el) {
+    const s = S.survey, id = el.dataset.id;
+    if (!s?.delivery || s.id !== id || S.sid !== id || S.busy) return;
+    const warning = 'Будут удалены записи и фотографии этой сдачи. Исходное обследование и его фотографии сохранятся.';
+    if (!await ask(`Удалить сдачу «${s.name}»?\n\n${warning}`, 'Удалить сдачу', true)) return;
+    if (S.sid !== id) return;
+    await new Promise((resolve, reject) => {
+      const tx = DB.d.transaction(['surveys', 'files'], 'readwrite');
+      const surveys = tx.objectStore('surveys'), files = tx.objectStore('files');
+      let conflict;
+      const lookup = surveys.get(id);
+      lookup.onsuccess = () => {
+        const current = lookup.result;
+        if (!current) return; // Уже удалена в другой вкладке.
+        if (!current.delivery || current.delivery.revision !== s.delivery.revision) {
+          conflict = new Error('Запись изменилась. Откройте сдачу заново и проверьте её перед удалением.');
+          tx.abort();
+          return;
+        }
+        const owned = files.index('survey').getAllKeys(id);
+        owned.onsuccess = () => {
+          for (const key of owned.result) files.delete(key);
+          surveys.delete(id);
+        };
+      };
+      tx.oncomplete = resolve;
+      tx.onabort = () => reject(conflict || tx.error || new Error('Не удалось удалить сдачу'));
+    });
+    if (S.sid === id) go('home', {sid:null, survey:null, pts:[], pid:null, zip:null}, false);
+    toast('Сдача удалена');
+  }
   function install() {
     Object.assign(ACT,{
       'delivery-start':startMenu,'delivery-blank':()=>create(),'delivery-source':el=>fromPhone(el.dataset.id || S.sid),
-      'delivery-open':el=>openSurvey(el.dataset.id),'delivery-cancel':closeSheet,
+      'delivery-open':el=>openSurvey(el.dataset.id),'delivery-cancel':closeSheet,'delivery-delete':deleteDelivery,
       'delivery-plan':()=>sheet('<h3>Точки обследования</h3><div class="delivery-list">'+remaining(data()).map(p=>row('pick',p.id,p.name,'Добавить в фактическую трассу')).join('')+'</div>'),
       'delivery-pick':el=>{const p=remaining(data()).find(n=>n.id===el.dataset.id); if(p)nodeForm(p.kind,null,p);},
       'delivery-new-node':el=>nodeForm(el.dataset.kind),'delivery-node':el=>{const n=data().nodes.find(p=>p.id===el.dataset.id);if(n)nodeForm(n.kind,n);},
